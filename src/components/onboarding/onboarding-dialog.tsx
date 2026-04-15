@@ -119,13 +119,16 @@ export function OnboardingDialog() {
                   }
                 }}
                 disabled={(date) => date < today}
-                className="w-full rounded-2xl bg-transparent p-0"
-                classNames={{
-                  root: "w-full",
-                  month: "w-full",
-                  months: "w-full",
-                  table: "w-full",
-                  month_caption: "flex h-10 w-full items-center justify-center px-10",
+	                className="w-full rounded-2xl bg-transparent p-0"
+	                classNames={{
+	                  root: "relative w-full",
+	                  months: "relative w-full",
+	                  month: "relative w-full",
+	                  nav: "absolute inset-x-0 top-0 flex h-10 w-full items-center justify-between px-1",
+	                  button_previous: "size-9 rounded-full bg-white/80 p-0 text-slate-700 shadow-sm hover:bg-white",
+	                  button_next: "size-9 rounded-full bg-white/80 p-0 text-slate-700 shadow-sm hover:bg-white",
+	                  table: "w-full",
+	                  month_caption: "flex h-10 w-full items-center justify-center px-10",
                   weekday: "flex-1 rounded-md text-[0.75rem] font-normal text-muted-foreground select-none sm:text-[0.8rem]",
                 }}
               />

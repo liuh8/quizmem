@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import {
-  ArrowLeft,
   BookOpenText,
   CheckCircle2,
   PencilLine,
@@ -306,16 +305,6 @@ export function WrongBookList() {
           </p>
         </div>
 
-        <Button
-          asChild
-          variant="outline"
-          className="h-11 rounded-full border-cyan-200 bg-white/85 px-5 text-slate-700 hover:bg-cyan-50"
-        >
-          <Link href="/">
-            <ArrowLeft className="size-4" />
-            返回首页
-          </Link>
-        </Button>
       </div>
 
       {wrongBookEntries.length === 0 ? (

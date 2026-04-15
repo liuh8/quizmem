@@ -95,11 +95,11 @@ export function EmailLoginDialog() {
 
   return (
     <Dialog open={isOpen}>
-      <DialogContent
-        showCloseButton={false}
-        className="max-w-xl rounded-[28px] border-cyan-100 bg-white/98 p-0 shadow-2xl shadow-cyan-100/80"
-      >
-        <div className="grid gap-0 sm:grid-cols-[1.05fr_0.95fr]">
+	      <DialogContent
+	        showCloseButton={false}
+	        className="max-w-xl overflow-hidden rounded-[28px] border-cyan-100 bg-white/98 p-0 shadow-2xl shadow-cyan-100/80"
+	      >
+	        <div className="grid gap-0 overflow-hidden rounded-[28px] sm:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-5 bg-gradient-to-br from-sky-500 via-cyan-500 to-teal-500 px-6 py-7 text-white sm:px-7 sm:py-8">
             <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/16 px-3 py-1 text-xs font-medium tracking-[0.18em] uppercase">
               <Mail className="size-3.5" />

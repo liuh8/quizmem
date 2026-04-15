@@ -288,22 +288,31 @@ export function DailyPractice({
     () => todayPlan?.newQuestions.questionIds ?? [],
     [todayPlan],
   );
-  const completedNewQuestionIds = useMemo(
-    () => todayPlan?.newQuestions.completedQuestionIds ?? [],
-    [todayPlan],
-  );
-  const autoFocusKeyRef = useRef<string | null>(null);
-  const lastAnsweredQuestionRef = useRef<number | null>(null);
+	  const completedNewQuestionIds = useMemo(
+	    () => todayPlan?.newQuestions.completedQuestionIds ?? [],
+	    [todayPlan],
+	  );
+	  const initialTabKeyRef = useRef<string | null>(null);
+	  const autoFocusKeyRef = useRef<string | null>(null);
+	  const lastAnsweredQuestionRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (!planDate) {
-      return;
-    }
+	  useEffect(() => {
+	    if (!planDate) {
+	      return;
+	    }
 
-    if (session.activeTab !== initialTab) {
-      patchSession(planDate, { activeTab: initialTab });
-    }
-  }, [initialTab, patchSession, planDate, session.activeTab]);
+	    const initialTabKey = `${planDate}:${initialTab}`;
+
+	    if (initialTabKeyRef.current === initialTabKey) {
+	      return;
+	    }
+
+	    initialTabKeyRef.current = initialTabKey;
+
+	    if (session.activeTab !== initialTab) {
+	      patchSession(planDate, { activeTab: initialTab });
+	    }
+	  }, [initialTab, patchSession, planDate, session.activeTab]);
 
   useEffect(() => {
     if (!planDate || session.activeTab !== "new") {

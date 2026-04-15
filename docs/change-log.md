@@ -377,6 +377,28 @@ Append-only project log. Each entry records:
   - `src/components/practice/fill-blank-preview.tsx`
   - `src/components/shared/bind-email-dialog.tsx`
 
+## 2026-04-16-22-34
+
+- Completed:
+  - Fixed onboarding calendar month-navigation arrow placement
+  - Fixed rounded clipping for auth/login/bind-email dialog gradient panels, including mobile layouts
+  - Moved the wrong-book back-home button to match the practice page position
+  - Allowed manual switching between new-question and review tabs after entering the practice page
+  - Re-verified the project with ESLint and a production build
+- Why:
+  - The user found several UI polish issues after deployment and wanted the practice page entry tab to stay as a default rather than a lock
+- Decisions:
+  - Practice entry links still choose the initial tab, but the in-page tabs are now user-controlled after that initial application
+- Files touched:
+  - `docs/change-log.md`
+  - `src/components/onboarding/onboarding-dialog.tsx`
+  - `src/components/shared/auth-entry-dialog.tsx`
+  - `src/components/shared/email-login-dialog.tsx`
+  - `src/components/shared/bind-email-dialog.tsx`
+  - `src/app/wrong-book/page.tsx`
+  - `src/components/wrong-book/wrong-book-list.tsx`
+  - `src/components/practice/daily-practice.tsx`
+
 ## 2026-04-16-00-13
 
 - Completed:
