@@ -117,20 +117,26 @@ export function OnboardingDialog() {
                   if (date) {
                     setSelectedDate(startOfDay(date));
                   }
-                }}
-                disabled={(date) => date < today}
-	                className="w-full rounded-2xl bg-transparent p-0"
+	                }}
+	                disabled={(date) => date < today}
+	                formatters={{
+	                  formatCaption: (month) => format(month, "yyyy 年 M 月"),
+	                }}
+	                className="mx-auto w-full max-w-sm rounded-2xl bg-transparent p-0"
 	                classNames={{
-	                  root: "relative w-full",
-	                  months: "relative w-full",
-	                  month: "relative w-full",
-	                  nav: "absolute inset-x-0 top-0 flex h-10 w-full items-center justify-between px-1",
-	                  button_previous: "size-9 rounded-full bg-white/80 p-0 text-slate-700 shadow-sm hover:bg-white",
-	                  button_next: "size-9 rounded-full bg-white/80 p-0 text-slate-700 shadow-sm hover:bg-white",
-	                  table: "w-full",
+	                  root: "relative mx-auto w-full max-w-sm",
+	                  months: "relative flex w-full flex-col gap-4",
+	                  month: "relative flex w-full flex-col gap-4",
+	                  nav: "absolute inset-x-0 top-0 z-10 flex h-10 w-full items-center justify-between px-1 pointer-events-none",
+	                  button_previous: "pointer-events-auto grid size-9 place-items-center rounded-full bg-white/80 p-0 text-slate-700 shadow-sm hover:bg-white [&_svg]:m-0",
+	                  button_next: "pointer-events-auto grid size-9 place-items-center rounded-full bg-white/80 p-0 text-slate-700 shadow-sm hover:bg-white [&_svg]:m-0",
+	                  table: "w-full border-collapse",
+	                  weekdays: "flex w-full",
+	                  week: "mt-2 flex w-full",
+	                  weekday: "flex-1 rounded-md text-[0.75rem] font-normal text-muted-foreground select-none sm:text-[0.8rem]",
+	                  outside: "text-slate-300 opacity-60 aria-selected:text-slate-300",
 	                  month_caption: "flex h-10 w-full items-center justify-center px-10",
-                  weekday: "flex-1 rounded-md text-[0.75rem] font-normal text-muted-foreground select-none sm:text-[0.8rem]",
-                }}
+	                }}
               />
             </div>
 
