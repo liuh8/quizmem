@@ -84,6 +84,7 @@ export function SupabaseAuthBootstrap() {
   const setLoading = useAuthStore((state) => state.setLoading);
   const setSession = useAuthStore((state) => state.setSession);
   const setError = useAuthStore((state) => state.setError);
+  const clearAuthFlowIntent = useAuthStore((state) => state.clearAuthFlowIntent);
   const targetDate = usePlanStore((state) => state.targetDate);
   const hasCompletedOnboarding = usePlanStore((state) => state.hasCompletedOnboarding);
   const isRestoringFromCloud = usePlanStore((state) => state.isRestoringFromCloud);
@@ -116,6 +117,7 @@ export function SupabaseAuthBootstrap() {
       }
 
       if (sessionError) {
+        setCloudRestoreState(false);
         setError(sessionError.message);
         return;
       }
@@ -130,6 +132,7 @@ export function SupabaseAuthBootstrap() {
         return;
       }
 
+      setCloudRestoreState(true);
       const { data, error } = await supabase.auth.signInAnonymously();
 
       if (isCancelled) {
@@ -137,6 +140,7 @@ export function SupabaseAuthBootstrap() {
       }
 
       if (error) {
+        setCloudRestoreState(false);
         setError(error.message);
         return;
       }
@@ -160,15 +164,20 @@ export function SupabaseAuthBootstrap() {
       isCancelled = true;
       subscription.unsubscribe();
     };
-  }, [autoAnonymousEnabled, setError, setLoading, setSession]);
+  }, [autoAnonymousEnabled, setCloudRestoreState, setError, setLoading, setSession]);
 
   useEffect(() => {
     if (!userId) {
-      setCloudRestoreState(false);
       syncedProfileKeyRef.current = null;
       syncedPlansKeyRef.current = null;
       hydratedWrongBookUserRef.current = null;
       hydratedPlanUserRef.current = null;
+
+      if (!autoAnonymousEnabled && status !== "loading") {
+        setCloudRestoreState(false);
+        clearAuthFlowIntent();
+      }
+
       return;
     }
 
@@ -213,7 +222,17 @@ export function SupabaseAuthBootstrap() {
     return () => {
       isCancelled = true;
     };
-  }, [hasCompletedOnboarding, isRestoringFromCloud, setCloudRestoreState, setError, targetDate, userId]);
+  }, [
+    autoAnonymousEnabled,
+    clearAuthFlowIntent,
+    hasCompletedOnboarding,
+    isRestoringFromCloud,
+    setCloudRestoreState,
+    setError,
+    status,
+    targetDate,
+    userId,
+  ]);
 
   useEffect(() => {
     if (!userId || hydratedPlanUserRef.current === userId) {
@@ -242,18 +261,21 @@ export function SupabaseAuthBootstrap() {
 
       if (profileError) {
         setCloudRestoreState(false);
+        clearAuthFlowIntent();
         setError(profileError.message);
         return;
       }
 
       if (dailyPlanError) {
         setCloudRestoreState(false);
+        clearAuthFlowIntent();
         setError(dailyPlanError.message);
         return;
       }
 
       if (userLogError) {
         setCloudRestoreState(false);
+        clearAuthFlowIntent();
         setError(userLogError.message);
         return;
       }
@@ -266,6 +288,7 @@ export function SupabaseAuthBootstrap() {
       if (!restoredTargetDate || dailyPlanSnapshots.length === 0) {
         hydratedPlanUserRef.current = currentUserId;
         setCloudRestoreState(false);
+        clearAuthFlowIntent();
         return;
       }
 
@@ -282,6 +305,7 @@ export function SupabaseAuthBootstrap() {
       hydrateDailyPracticeSessions(restoredSessions);
       hydratedPlanUserRef.current = currentUserId;
       setCloudRestoreState(false);
+      clearAuthFlowIntent();
     }
 
     hydrateCloudPlan();
@@ -289,7 +313,14 @@ export function SupabaseAuthBootstrap() {
     return () => {
       isCancelled = true;
     };
-  }, [hydrateDailyPracticeSessions, hydratePlan, setCloudRestoreState, setError, userId]);
+  }, [
+    clearAuthFlowIntent,
+    hydrateDailyPracticeSessions,
+    hydratePlan,
+    setCloudRestoreState,
+    setError,
+    userId,
+  ]);
 
   useEffect(() => {
     if (!userId || !plan || isRestoringFromCloud) {

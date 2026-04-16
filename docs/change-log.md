@@ -377,6 +377,51 @@ Append-only project log. Each entry records:
   - `src/components/practice/fill-blank-preview.tsx`
   - `src/components/shared/bind-email-dialog.tsx`
 
+## 2026-04-16-11-20
+
+- Completed:
+  - Added intent-aware full-screen loading feedback for login restore, anonymous entry, and register-before-onboarding flows
+  - Added a direct `去注册并绑定邮箱` entry to the initial account-choice dialog
+  - Updated the bind-email dialog with clearer spacing between the first and second email inputs
+  - Made onboarding and account-entry dialogs avoid competing with the bind-email dialog
+  - Re-verified the project with `pnpm exec eslint .` and `pnpm build --webpack`
+- Why:
+  - The auth flow previously had silent transition moments where the page looked stuck during anonymous session creation or cloud restore
+  - The registration path needed to be reachable before onboarding so returning users on new devices are not forced into plan selection first
+  - The second email field in the bind flow needed stronger visual separation to reduce input mistakes
+- Decisions:
+  - Loading feedback now appears only during real restore/setup phases, not immediately when the user merely opens the email-login form
+  - The restore overlay is rendered as a full-screen centered layer instead of another card dialog
+  - Restore copy varies by intent: login, anonymous entry, and register/bind each use different wording
+- Files touched:
+  - `docs/change-log.md`
+  - `src/app/layout.tsx`
+  - `src/components/onboarding/onboarding-dialog.tsx`
+  - `src/components/shared/auth-entry-dialog.tsx`
+  - `src/components/shared/bind-email-dialog.tsx`
+  - `src/components/shared/cloud-restore-overlay.tsx`
+  - `src/components/shared/email-login-dialog.tsx`
+  - `src/components/shared/supabase-auth-bootstrap.tsx`
+  - `src/store/useAuthStore.ts`
+
+## 2026-04-16-11-36
+
+- Completed:
+  - Fixed the anonymous-entry loading state so it no longer flashes to a blank screen before the overlay appears
+  - Moved the register/bind flow onto the same early loading path so the bind intent is preserved while the anonymous session is being prepared
+  - Re-verified the project with `pnpm exec eslint .` and `pnpm build --webpack`
+- Why:
+  - The previous implementation still had a race where the global restore state was being cleared while `userId` was temporarily null
+  - That race made anonymous entry feel broken and made the register path look like it was following the wrong sequence
+- Decisions:
+  - Anonymous and register entry points now set the restore state immediately on click
+  - The auth bootstrap only clears restore intent when the app is genuinely back in an idle, non-anonymous state
+- Files touched:
+  - `docs/change-log.md`
+  - `src/components/shared/auth-entry-dialog.tsx`
+  - `src/components/shared/email-login-dialog.tsx`
+  - `src/components/shared/supabase-auth-bootstrap.tsx`
+
 ## 2026-04-16-22-34
 
 - Completed:

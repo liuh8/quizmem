@@ -5,6 +5,7 @@ import { KeyRound, Mail, ShieldCheck } from "lucide-react";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/store/useAuthStore";
+import { usePlanStore } from "@/store/usePlanStore";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,11 +20,30 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function getFriendlyLoginError(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("user not found") ||
+    normalized.includes("email not confirmed") ||
+    normalized.includes("signup") ||
+    normalized.includes("signups not allowed")
+  ) {
+    return "未找到这个邮箱对应的学习记录，请先注册。";
+  }
+
+  return message;
+}
+
 export function EmailLoginDialog() {
   const isOpen = useAuthStore((state) => state.isEmailLoginDialogOpen);
   const autoAnonymousEnabled = useAuthStore((state) => state.autoAnonymousEnabled);
+  const status = useAuthStore((state) => state.status);
   const setAutoAnonymousEnabled = useAuthStore((state) => state.setAutoAnonymousEnabled);
   const setEmailLoginDialogOpen = useAuthStore((state) => state.setEmailLoginDialogOpen);
+  const setBindEmailDialogOpen = useAuthStore((state) => state.setBindEmailDialogOpen);
+  const setAuthFlowIntent = useAuthStore((state) => state.setAuthFlowIntent);
+  const setCloudRestoreState = usePlanStore((state) => state.setCloudRestoreState);
 
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -52,7 +72,7 @@ export function EmailLoginDialog() {
     setIsSubmitting(false);
 
     if (error) {
-      setSubmitError(error.message);
+      setSubmitError(getFriendlyLoginError(error.message));
       return;
     }
 
@@ -69,6 +89,7 @@ export function EmailLoginDialog() {
     setSubmitError(null);
 
     const supabase = getSupabaseBrowserClient();
+    setAuthFlowIntent("login");
     const { error } = await supabase.auth.verifyOtp({
       email: normalizedEmail,
       token: otp.trim(),
@@ -78,6 +99,7 @@ export function EmailLoginDialog() {
     setIsSubmitting(false);
 
     if (error) {
+      setAuthFlowIntent(null);
       setSubmitError(error.message);
       return;
     }
@@ -88,7 +110,21 @@ export function EmailLoginDialog() {
     setStep("email");
   }
 
+  function handleOpenBindEmail() {
+    setSubmitError(null);
+    setEmailLoginDialogOpen(false);
+    setBindEmailDialogOpen(true);
+    setAuthFlowIntent("register");
+
+    if (status !== "authenticated") {
+      setCloudRestoreState(true);
+      setAutoAnonymousEnabled(true);
+    }
+  }
+
   function handleContinueAnonymously() {
+    setAuthFlowIntent("anonymous");
+    setCloudRestoreState(true);
     setAutoAnonymousEnabled(true);
     setEmailLoginDialogOpen(false);
   }
@@ -161,16 +197,25 @@ export function EmailLoginDialog() {
               </div>
             ) : null}
 
-            <DialogFooter className="flex-col gap-3 sm:flex-col">
-              {step === "email" ? (
-                <Button
-                  className="h-12 rounded-full bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-500 text-white"
-                  disabled={isSubmitting || !normalizedEmail}
-                  onClick={handleSendOtp}
-                >
-                  {isSubmitting ? "发送中..." : "发送验证码"}
-                </Button>
-              ) : (
+	            <DialogFooter className="flex-col gap-3 sm:flex-col">
+	              {step === "email" ? (
+	                <>
+	                  <Button
+	                    className="h-12 rounded-full bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-500 text-white"
+	                    disabled={isSubmitting || !normalizedEmail}
+	                    onClick={handleSendOtp}
+	                  >
+	                    {isSubmitting ? "发送中..." : "发送验证码"}
+	                  </Button>
+	                  <Button
+	                    variant="outline"
+	                    className="h-12 rounded-full border-cyan-200 bg-white text-slate-700 hover:bg-cyan-50"
+	                    onClick={handleOpenBindEmail}
+	                  >
+	                    去注册并绑定邮箱
+	                  </Button>
+	                </>
+	              ) : (
                 <>
                   <Button
                     className="h-12 rounded-full bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-500 text-white"

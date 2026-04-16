@@ -29,6 +29,7 @@ export function OnboardingDialog() {
   const status = useAuthStore((state) => state.status);
   const autoAnonymousEnabled = useAuthStore((state) => state.autoAnonymousEnabled);
   const isEmailLoginDialogOpen = useAuthStore((state) => state.isEmailLoginDialogOpen);
+  const isBindEmailDialogOpen = useAuthStore((state) => state.isBindEmailDialogOpen);
   const hasCompletedOnboarding = usePlanStore((state) => state.hasCompletedOnboarding);
   const isRestoringFromCloud = usePlanStore((state) => state.isRestoringFromCloud);
   const storedTargetDate = usePlanStore((state) => state.targetDate);
@@ -54,7 +55,8 @@ export function OnboardingDialog() {
     !hasCompletedOnboarding &&
     status === "authenticated" &&
     autoAnonymousEnabled &&
-    !isEmailLoginDialogOpen;
+    !isEmailLoginDialogOpen &&
+    !isBindEmailDialogOpen;
 
   return (
     <Dialog open={shouldOpenOnboarding}>

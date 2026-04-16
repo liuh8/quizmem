@@ -18,16 +18,21 @@ export function AuthEntryDialog() {
   const status = useAuthStore((state) => state.status);
   const autoAnonymousEnabled = useAuthStore((state) => state.autoAnonymousEnabled);
   const isEmailLoginDialogOpen = useAuthStore((state) => state.isEmailLoginDialogOpen);
+  const isBindEmailDialogOpen = useAuthStore((state) => state.isBindEmailDialogOpen);
   const setAutoAnonymousEnabled = useAuthStore((state) => state.setAutoAnonymousEnabled);
   const setEmailLoginDialogOpen = useAuthStore((state) => state.setEmailLoginDialogOpen);
+  const setBindEmailDialogOpen = useAuthStore((state) => state.setBindEmailDialogOpen);
+  const setAuthFlowIntent = useAuthStore((state) => state.setAuthFlowIntent);
   const hasCompletedOnboarding = usePlanStore((state) => state.hasCompletedOnboarding);
   const isRestoringFromCloud = usePlanStore((state) => state.isRestoringFromCloud);
+  const setCloudRestoreState = usePlanStore((state) => state.setCloudRestoreState);
 
   const shouldOpen =
     !isRestoringFromCloud &&
     status === "idle" &&
     !autoAnonymousEnabled &&
     !isEmailLoginDialogOpen &&
+    !isBindEmailDialogOpen &&
     !hasCompletedOnboarding;
 
   return (
@@ -66,7 +71,9 @@ export function AuthEntryDialog() {
             <DialogFooter className="flex-col gap-3 sm:flex-col">
               <Button
                 className="h-12 rounded-full bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-500 text-white"
-                onClick={() => setEmailLoginDialogOpen(true)}
+                onClick={() => {
+                  setEmailLoginDialogOpen(true);
+                }}
               >
                 <Mail className="size-4" />
                 邮箱登录
@@ -74,7 +81,24 @@ export function AuthEntryDialog() {
               <Button
                 variant="outline"
                 className="h-12 rounded-full border-cyan-200 bg-white text-slate-700 hover:bg-cyan-50"
-                onClick={() => setAutoAnonymousEnabled(true)}
+                onClick={() => {
+                  setAuthFlowIntent("register");
+                  setBindEmailDialogOpen(true);
+                  setCloudRestoreState(true);
+                  setAutoAnonymousEnabled(true);
+                }}
+              >
+                <Mail className="size-4" />
+                去注册并绑定邮箱
+              </Button>
+              <Button
+                variant="outline"
+                className="h-12 rounded-full border-cyan-200 bg-white text-slate-700 hover:bg-cyan-50"
+                onClick={() => {
+                  setAuthFlowIntent("anonymous");
+                  setCloudRestoreState(true);
+                  setAutoAnonymousEnabled(true);
+                }}
               >
                 <ShieldCheck className="size-4" />
                 继续匿名使用

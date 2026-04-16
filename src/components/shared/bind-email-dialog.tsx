@@ -24,32 +24,37 @@ export function BindEmailDialog() {
   const status = useAuthStore((state) => state.status);
   const email = useAuthStore((state) => state.email);
   const isAnonymous = useAuthStore((state) => state.isAnonymous);
+  const isBindEmailDialogOpen = useAuthStore((state) => state.isBindEmailDialogOpen);
   const hasDismissedBindEmailPrompt = useAuthStore(
     (state) => state.hasDismissedBindEmailPrompt,
   );
   const setBindEmailPromptDismissed = useAuthStore(
     (state) => state.setBindEmailPromptDismissed,
   );
+  const setBindEmailDialogOpen = useAuthStore((state) => state.setBindEmailDialogOpen);
+  const clearAuthFlowIntent = useAuthStore((state) => state.clearAuthFlowIntent);
   const hasCompletedOnboarding = usePlanStore((state) => state.hasCompletedOnboarding);
   const isRestoringFromCloud = usePlanStore((state) => state.isRestoringFromCloud);
 
   const [pendingEmail, setPendingEmail] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [hasSentLink, setHasSentLink] = useState(false);
+  const [hasBoundEmail, setHasBoundEmail] = useState(false);
 
   const shouldOpen = useMemo(
     () =>
       !isRestoringFromCloud &&
-      hasCompletedOnboarding &&
       status === "authenticated" &&
       isAnonymous &&
       !email &&
-      !hasDismissedBindEmailPrompt,
+      (isBindEmailDialogOpen ||
+        (hasCompletedOnboarding && !hasDismissedBindEmailPrompt)),
     [
       email,
       hasCompletedOnboarding,
       hasDismissedBindEmailPrompt,
+      isBindEmailDialogOpen,
       isAnonymous,
       isRestoringFromCloud,
       status,
@@ -58,9 +63,20 @@ export function BindEmailDialog() {
 
   async function handleBindEmail() {
     const normalizedEmail = pendingEmail.trim().toLowerCase();
+    const normalizedConfirmEmail = confirmEmail.trim().toLowerCase();
 
     if (!isValidEmail(normalizedEmail)) {
       setSubmitError("请输入一个有效的邮箱地址。");
+      return;
+    }
+
+    if (!isValidEmail(normalizedConfirmEmail)) {
+      setSubmitError("请再次输入一个有效的邮箱地址。");
+      return;
+    }
+
+    if (normalizedEmail !== normalizedConfirmEmail) {
+      setSubmitError("两次输入的邮箱地址不一致，请重新确认。");
       return;
     }
 
@@ -79,7 +95,9 @@ export function BindEmailDialog() {
       return;
     }
 
-    setHasSentLink(true);
+    setHasBoundEmail(true);
+    setBindEmailDialogOpen(false);
+    clearAuthFlowIntent();
   }
 
   return (
@@ -111,18 +129,18 @@ export function BindEmailDialog() {
                 绑定邮箱
               </DialogTitle>
               <DialogDescription className="text-sm leading-6 text-slate-600">
-                我们会发送一封验证邮件或验证码到你的邮箱，完成后这个账号就可以跨设备继续使用。
+                绑定成功后，这个邮箱就会和当前学习进度关联，下次可以直接用邮箱登录继续学习。
               </DialogDescription>
             </DialogHeader>
 
-            {hasSentLink ? (
+            {hasBoundEmail ? (
               <div className="space-y-4 rounded-[24px] border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
                 <div className="flex items-center gap-2 font-medium">
                   <CheckCircle2 className="size-4" />
-                  验证信息已发送
+                  绑定成功
                 </div>
                 <p className="text-sm leading-6">
-                  请去邮箱完成验证。验证成功后，你下次回到应用时就会以已绑定邮箱的身份继续学习。
+                  这个邮箱已经和当前学习进度绑定，下次可以直接用邮箱登录继续学习。
                 </p>
               </div>
             ) : (
@@ -141,6 +159,20 @@ export function BindEmailDialog() {
                   />
                 </label>
 
+                <label className="mt-4 space-y-2 text-sm font-medium text-slate-700">
+                  <span className="inline-flex items-center gap-2">
+                    <Mail className="size-4 text-cyan-600" />
+                    再次输入邮箱地址
+                  </span>
+                  <input
+                    type="email"
+                    value={confirmEmail}
+                    onChange={(event) => setConfirmEmail(event.target.value)}
+                    placeholder="再次输入邮箱地址"
+                    className="h-12 w-full rounded-2xl border border-cyan-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100"
+                  />
+                </label>
+
                 {submitError ? (
                   <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-700">
                     {submitError}
@@ -150,21 +182,25 @@ export function BindEmailDialog() {
             )}
 
             <DialogFooter className="flex-col gap-3 sm:flex-col">
-              {!hasSentLink ? (
+              {!hasBoundEmail ? (
                 <Button
                   className="h-12 rounded-full bg-gradient-to-r from-teal-500 via-cyan-500 to-sky-500 text-white"
-                  disabled={isSubmitting || !pendingEmail.trim()}
+                  disabled={isSubmitting || !pendingEmail.trim() || !confirmEmail.trim()}
                   onClick={handleBindEmail}
                 >
-                  {isSubmitting ? "发送中..." : "发送验证邮件"}
+                  {isSubmitting ? "绑定中..." : "确认绑定"}
                 </Button>
               ) : null}
               <Button
                 variant="outline"
                 className="h-12 rounded-full border-cyan-200 bg-white text-slate-700 hover:bg-cyan-50"
-                onClick={() => setBindEmailPromptDismissed(true)}
+                onClick={() => {
+                  setBindEmailPromptDismissed(true);
+                  setBindEmailDialogOpen(false);
+                  clearAuthFlowIntent();
+                }}
               >
-                {hasSentLink ? "我知道了" : "暂时跳过"}
+                {hasBoundEmail ? "我知道了" : "暂时跳过"}
               </Button>
             </DialogFooter>
           </div>

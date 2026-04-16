@@ -5,6 +5,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 type AuthStatus = "idle" | "loading" | "authenticated" | "error";
+export type AuthFlowIntent = "login" | "register" | "anonymous" | null;
 
 interface AuthStoreState {
   status: AuthStatus;
@@ -16,6 +17,8 @@ interface AuthStoreState {
   hasDismissedBindEmailPrompt: boolean;
   autoAnonymousEnabled: boolean;
   isEmailLoginDialogOpen: boolean;
+  isBindEmailDialogOpen: boolean;
+  authFlowIntent: AuthFlowIntent;
 }
 
 interface AuthStoreActions {
@@ -25,6 +28,9 @@ interface AuthStoreActions {
   setBindEmailPromptDismissed: (dismissed: boolean) => void;
   setAutoAnonymousEnabled: (enabled: boolean) => void;
   setEmailLoginDialogOpen: (open: boolean) => void;
+  setBindEmailDialogOpen: (open: boolean) => void;
+  setAuthFlowIntent: (intent: AuthFlowIntent) => void;
+  clearAuthFlowIntent: () => void;
   reset: () => void;
 }
 
@@ -40,6 +46,8 @@ const initialState: AuthStoreState = {
   hasDismissedBindEmailPrompt: false,
   autoAnonymousEnabled: false,
   isEmailLoginDialogOpen: false,
+  isBindEmailDialogOpen: false,
+  authFlowIntent: null,
 };
 
 export const useAuthStore = create<AuthStore>()(
@@ -71,6 +79,7 @@ export const useAuthStore = create<AuthStore>()(
             ? true
             : state.hasDismissedBindEmailPrompt,
           autoAnonymousEnabled: session ? true : state.autoAnonymousEnabled,
+          isBindEmailDialogOpen: session?.user.email ? false : state.isBindEmailDialogOpen,
         }));
       },
 
@@ -99,6 +108,24 @@ export const useAuthStore = create<AuthStore>()(
         });
       },
 
+      setBindEmailDialogOpen: (open) => {
+        set({
+          isBindEmailDialogOpen: open,
+        });
+      },
+
+      setAuthFlowIntent: (intent) => {
+        set({
+          authFlowIntent: intent,
+        });
+      },
+
+      clearAuthFlowIntent: () => {
+        set({
+          authFlowIntent: null,
+        });
+      },
+
       reset: () => {
         set(initialState);
       },
@@ -108,6 +135,7 @@ export const useAuthStore = create<AuthStore>()(
       partialize: (state) => ({
         autoAnonymousEnabled: state.autoAnonymousEnabled,
         isEmailLoginDialogOpen: state.isEmailLoginDialogOpen,
+        isBindEmailDialogOpen: state.isBindEmailDialogOpen,
         hasDismissedBindEmailPrompt: state.hasDismissedBindEmailPrompt,
       }),
     },

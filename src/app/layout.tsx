@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+import { CloudRestoreOverlay } from "@/components/shared/cloud-restore-overlay";
 import { SupabaseAuthBootstrap } from "@/components/shared/supabase-auth-bootstrap";
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export default function RootLayout({
     <html lang="zh-CN" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <SupabaseAuthBootstrap />
+        <CloudRestoreOverlay />
         {children}
       </body>
     </html>
