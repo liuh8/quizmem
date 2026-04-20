@@ -1,4 +1,10 @@
-import type { DailyPlan, ISODateString, Question, WrongBookItem } from "@/types";
+import type {
+  DailyPlan,
+  FavoriteItem,
+  ISODateString,
+  Question,
+  WrongBookItem,
+} from "@/types";
 import type { Database } from "@/types/supabase";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -9,6 +15,7 @@ type DailyPlanInsert = Database["public"]["Tables"]["daily_plans"]["Insert"];
 type UserLogRow = Database["public"]["Tables"]["user_logs"]["Row"];
 type UserLogInsert = Database["public"]["Tables"]["user_logs"]["Insert"];
 type WrongBookInsert = Database["public"]["Tables"]["wrong_books"]["Insert"];
+type FavoriteInsert = Database["public"]["Tables"]["favorites"]["Insert"];
 
 function toJsonNumberArray(values: number[]) {
   return values;
@@ -170,6 +177,45 @@ export async function fetchWrongBookItems(userId: string) {
   return result;
 }
 
+export async function upsertFavoriteItem(params: {
+  userId: string;
+  questionId: number;
+  addedAt?: string;
+  lastReviewedAt?: string | null;
+}) {
+  const supabase = getSupabaseBrowserClient();
+  const payload: FavoriteInsert = {
+    user_id: params.userId,
+    question_id: params.questionId,
+    added_at: params.addedAt,
+    last_reviewed_at: params.lastReviewedAt,
+  };
+
+  return supabase.from("favorites").upsert(payload, {
+    onConflict: "user_id,question_id",
+  });
+}
+
+export async function removeFavoriteItem(userId: string, questionId: number) {
+  const supabase = getSupabaseBrowserClient();
+
+  return supabase
+    .from("favorites")
+    .delete()
+    .eq("user_id", userId)
+    .eq("question_id", questionId);
+}
+
+export async function fetchFavoriteItems(userId: string) {
+  const supabase = getSupabaseBrowserClient();
+
+  return supabase
+    .from("favorites")
+    .select("*")
+    .eq("user_id", userId)
+    .order("added_at", { ascending: false });
+}
+
 export function mapWrongBookRowsToItems(
   rows: Database["public"]["Tables"]["wrong_books"]["Row"][],
 ): WrongBookItem[] {
@@ -180,6 +226,17 @@ export function mapWrongBookRowsToItems(
     lastWrongAt: row.last_wrong_at,
     wrongCount: row.wrong_count,
     isResolved: row.is_resolved,
+  }));
+}
+
+export function mapFavoriteRowsToItems(
+  rows: Database["public"]["Tables"]["favorites"]["Row"][],
+): FavoriteItem[] {
+  return rows.map((row) => ({
+    userId: row.user_id,
+    questionId: row.question_id,
+    addedAt: row.added_at,
+    lastReviewedAt: row.last_reviewed_at,
   }));
 }
 

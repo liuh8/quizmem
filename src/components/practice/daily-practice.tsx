@@ -23,6 +23,7 @@ import { useWrongBookStore } from "@/store/useWrongBookStore";
 import { normalizeFillBlankAnswer } from "@/utils/answer";
 import { getTodayPlan as getDerivedTodayPlan } from "@/utils/scheduler";
 import type { Question } from "@/types";
+import { FavoriteQuestionButton } from "@/components/shared/favorite-question-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -183,20 +184,25 @@ function QuestionCard({
     <Card className="rounded-[28px] border-cyan-100/80 bg-white/92 shadow-lg shadow-cyan-100/70">
       <CardContent className="space-y-6 p-5 sm:p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <Badge className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-medium text-cyan-800">
-              {QUESTION_TYPE_LABELS[question.type]}
-            </Badge>
-            <Badge
-              variant="outline"
-              className="rounded-full border-slate-200 bg-white px-3 py-1 text-xs text-slate-600"
-            >
-              第 {currentIndex + 1} / {totalCount} 题
-            </Badge>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3">
+              <Badge className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-medium text-cyan-800">
+                {QUESTION_TYPE_LABELS[question.type]}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="rounded-full border-slate-200 bg-white px-3 py-1 text-xs text-slate-600"
+              >
+                第 {currentIndex + 1} / {totalCount} 题
+              </Badge>
+            </div>
           </div>
 
-          <div className="text-sm text-slate-500">
-            {QUESTION_TYPE_LABELS[question.type]}题库编号 #{question.sourceId}
+          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+            <div className="text-sm text-slate-500">
+              {QUESTION_TYPE_LABELS[question.type]}题库编号 #{question.sourceId}
+            </div>
+            <FavoriteQuestionButton questionId={question.id} />
           </div>
         </div>
 

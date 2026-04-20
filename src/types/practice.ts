@@ -37,3 +37,10 @@ export interface WrongBookItem {
   wrongCount: number;
   isResolved: boolean;
 }
+
+export interface FavoriteItem {
+  userId?: string;
+  questionId: number;
+  addedAt: ISODateString;
+  lastReviewedAt: ISODateString | null;
+}

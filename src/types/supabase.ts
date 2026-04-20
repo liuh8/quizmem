@@ -48,6 +48,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      favorites: {
+        Row: {
+          user_id: string;
+          question_id: number;
+          added_at: string;
+          last_reviewed_at: string | null;
+        };
+        Insert: {
+          user_id: string;
+          question_id: number;
+          added_at?: string;
+          last_reviewed_at?: string | null;
+        };
+        Update: {
+          user_id?: string;
+          question_id?: number;
+          added_at?: string;
+          last_reviewed_at?: string | null;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;

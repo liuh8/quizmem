@@ -28,6 +28,14 @@ create table if not exists public.wrong_books (
   primary key (user_id, question_id)
 );
 
+create table if not exists public.favorites (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  question_id integer not null,
+  added_at timestamptz not null default timezone('utc', now()),
+  last_reviewed_at timestamptz,
+  primary key (user_id, question_id)
+);
+
 create table if not exists public.daily_plans (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -67,6 +75,7 @@ execute function public.set_updated_at();
 alter table public.profiles enable row level security;
 alter table public.user_logs enable row level security;
 alter table public.wrong_books enable row level security;
+alter table public.favorites enable row level security;
 alter table public.daily_plans enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
@@ -93,6 +102,12 @@ with check (auth.uid() = user_id);
 drop policy if exists "wrong_books_all_own" on public.wrong_books;
 create policy "wrong_books_all_own"
 on public.wrong_books for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "favorites_all_own" on public.favorites;
+create policy "favorites_all_own"
+on public.favorites for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
@@ -129,6 +144,7 @@ begin
   end if;
 
   delete from public.wrong_books where user_id = old_user_id;
+  delete from public.favorites where user_id = old_user_id;
   delete from public.user_logs where user_id = old_user_id;
   delete from public.daily_plans where user_id = old_user_id;
   delete from public.profiles where id = old_user_id;

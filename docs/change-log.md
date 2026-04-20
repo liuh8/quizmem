@@ -198,6 +198,34 @@ Append-only project log. Each entry records:
   - `src/data/question_base_sc.json`
   - `src/data/question_base_tf.json`
 
+## 2026-04-21-20-20
+
+- Completed:
+  - Added the first end-to-end favorites flow with local store, cloud query helpers, question-card favorite toggle, dashboard entry, and dedicated favorites page
+  - Kept favorites independent from wrong-book removal logic while reusing the same session queue rotation behavior
+  - Updated the Supabase schema source to include a `favorites` table and anonymous-user cleanup coverage
+- Why:
+  - Users need a way to keep “答对但还不放心”的题目 for repeated review without forcing them into the wrong-book
+  - The favorites feature needs to work consistently across 今日新题、今日复习、错题本 and support future cross-device sync
+- Decisions:
+  - Favorites are allowed before answering
+  - Favorites are never auto-removed by correct or incorrect answers
+  - Favorites keep their own session queue and rotate reviewed items to the back only when leaving the page or after inactivity
+- Files touched:
+  - `docs/change-log.md`
+  - `src/types/practice.ts`
+  - `src/types/supabase.ts`
+  - `src/lib/supabase/queries.ts`
+  - `src/store/useFavoritesStore.ts`
+  - `src/components/shared/favorite-question-button.tsx`
+  - `src/components/shared/supabase-auth-bootstrap.tsx`
+  - `src/components/practice/daily-practice.tsx`
+  - `src/components/wrong-book/wrong-book-list.tsx`
+  - `src/components/favorites/favorites-list.tsx`
+  - `src/components/dashboard/dashboard-overview.tsx`
+  - `src/app/favorites/page.tsx`
+  - `supabase/schema.sql`
+
 ## 2026-04-14-01-38
 
 - Completed:

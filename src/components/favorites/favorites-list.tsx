@@ -7,14 +7,14 @@ import {
   BookOpenText,
   CheckCircle2,
   PencilLine,
-  Trash2,
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getQuestionsByIds } from "@/lib/questions";
-import { insertUserLog, removeWrongBookItem } from "@/lib/supabase/queries";
+import { insertUserLog, upsertFavoriteItem, upsertWrongBookItem } from "@/lib/supabase/queries";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useFavoritesStore } from "@/store/useFavoritesStore";
 import { useWrongBookStore } from "@/store/useWrongBookStore";
 import { normalizeFillBlankAnswer } from "@/utils/answer";
 import type { Question } from "@/types";
@@ -47,7 +47,7 @@ function getCorrectAnswerToken(question: Question) {
   return question.answer.trim();
 }
 
-function WrongBookAnswerPanel({
+function FavoriteAnswerPanel({
   question,
   selectedAnswer,
   hasAnswered,
@@ -123,26 +123,22 @@ function WrongBookAnswerPanel({
   );
 }
 
-function WrongBookQuestionCard({
+function FavoriteQuestionCard({
   question,
-  wrongCount,
   addedAt,
-  lastWrongAt,
+  lastReviewedAt,
   selectedAnswer,
   hasAnswered,
   onSelectAnswer,
   onSubmitFillBlank,
-  onRemove,
 }: {
   question: Question;
-  wrongCount: number;
   addedAt: string;
-  lastWrongAt: string;
+  lastReviewedAt: string | null;
   selectedAnswer?: string;
   hasAnswered: boolean;
   onSelectAnswer: (value: string) => void;
   onSubmitFillBlank: () => void;
-  onRemove: () => void;
 }) {
   const isCorrect =
     question.type === "fill_blank"
@@ -151,11 +147,11 @@ function WrongBookQuestionCard({
       : selectedAnswer === getCorrectAnswerToken(question);
 
   return (
-    <Card className="rounded-[26px] border-rose-100/80 bg-white/92 shadow-sm shadow-rose-100/70">
+    <Card className="rounded-[26px] border-amber-100/80 bg-white/92 shadow-sm shadow-amber-100/70">
       <CardContent className="space-y-5 p-5 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className="rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-800">
+            <Badge className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
               {QUESTION_TYPE_LABELS[question.type]}
             </Badge>
             <Badge
@@ -164,37 +160,24 @@ function WrongBookQuestionCard({
             >
               {QUESTION_TYPE_LABELS[question.type]}题库编号 #{question.sourceId}
             </Badge>
-            <Badge
-              variant="outline"
-              className="rounded-full border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800"
-            >
-              错误 {wrongCount} 次
-            </Badge>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <FavoriteQuestionButton questionId={question.id} />
-            <Button
-              variant="outline"
-              className="h-10 rounded-full border-rose-200 bg-rose-50/80 text-rose-700 hover:bg-rose-100"
-              onClick={onRemove}
-            >
-              <Trash2 className="size-4" />
-              移出错题本
-            </Button>
-          </div>
+          <FavoriteQuestionButton questionId={question.id} className="border-amber-200 bg-amber-50/80 text-amber-800 hover:bg-amber-100" />
         </div>
 
         <div className="space-y-1 text-xs leading-6 text-slate-500">
-          <p>加入时间：{format(parseISO(addedAt), "yyyy 年 M 月 d 日 HH:mm")}</p>
-          <p>最近答错：{format(parseISO(lastWrongAt), "yyyy 年 M 月 d 日 HH:mm")}</p>
+          <p>收藏时间：{format(parseISO(addedAt), "yyyy 年 M 月 d 日 HH:mm")}</p>
+          <p>
+            最近复习：
+            {lastReviewedAt ? format(parseISO(lastReviewedAt), "yyyy 年 M 月 d 日 HH:mm") : "还没有在收藏夹里做过"}
+          </p>
         </div>
 
         <h2 className="text-lg leading-8 font-semibold text-slate-900 sm:text-xl">
           {question.content}
         </h2>
 
-        <WrongBookAnswerPanel
+        <FavoriteAnswerPanel
           question={question}
           selectedAnswer={selectedAnswer}
           hasAnswered={hasAnswered}
@@ -244,13 +227,13 @@ function WrongBookQuestionCard({
   );
 }
 
-export function WrongBookList() {
+export function FavoritesList() {
   const pathname = usePathname();
   const userId = useAuthStore((state) => state.userId);
-  const wrongBookItems = useWrongBookStore((state) => state.items);
-  const queueOrder = useWrongBookStore((state) => state.queueOrder);
-  const removeWrongQuestion = useWrongBookStore((state) => state.removeWrongQuestion);
-  const setQueueOrder = useWrongBookStore((state) => state.setQueueOrder);
+  const favoriteItems = useFavoritesStore((state) => state.items);
+  const queueOrder = useFavoritesStore((state) => state.queueOrder);
+  const setQueueOrder = useFavoritesStore((state) => state.setQueueOrder);
+  const touchFavoriteReview = useFavoritesStore((state) => state.touchFavoriteReview);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [submitted, setSubmitted] = useState<Record<number, boolean>>({});
   const [sessionQueue, setSessionQueue] = useState<number[]>([]);
@@ -262,22 +245,24 @@ export function WrongBookList() {
 
   const sortedFallbackQueue = useMemo(
     () =>
-      Object.values(wrongBookItems)
+      Object.values(favoriteItems)
         .sort(
           (left, right) =>
-            new Date(right.lastWrongAt).getTime() - new Date(left.lastWrongAt).getTime(),
+            new Date(right.addedAt).getTime() - new Date(left.addedAt).getTime(),
         )
         .map((item) => item.questionId),
-    [wrongBookItems],
+    [favoriteItems],
   );
+
   const orderedQueue = useMemo(() => {
-    const knownIds = new Set(Object.keys(wrongBookItems).map(Number));
+    const knownIds = new Set(Object.keys(favoriteItems).map(Number));
 
     return [
       ...queueOrder.filter((questionId) => knownIds.has(questionId)),
       ...sortedFallbackQueue.filter((questionId) => !queueOrder.includes(questionId)),
     ];
-  }, [queueOrder, sortedFallbackQueue, wrongBookItems]);
+  }, [favoriteItems, queueOrder, sortedFallbackQueue]);
+
   const effectiveSessionQueue = sessionQueue.length > 0 ? sessionQueue : orderedQueue;
 
   useEffect(() => {
@@ -334,19 +319,19 @@ export function WrongBookList() {
     };
   }, [finalizeSessionQueue, lastActivityAt, reviewedInSession, sessionQueue]);
 
-  const wrongBookEntries = useMemo(() => {
+  const favoriteEntries = useMemo(() => {
     const itemMap = new Map(
-      Object.values(wrongBookItems).map((item) => [item.questionId, item]),
+      Object.values(favoriteItems).map((item) => [item.questionId, item]),
     );
 
     return effectiveSessionQueue
       .map((questionId) => itemMap.get(questionId))
-      .filter((item): item is typeof wrongBookItems[number] => Boolean(item));
-  }, [effectiveSessionQueue, wrongBookItems]);
+      .filter((item): item is (typeof favoriteItems)[number] => Boolean(item));
+  }, [effectiveSessionQueue, favoriteItems]);
 
   const questions = useMemo(
-    () => getQuestionsByIds(wrongBookEntries.map((item) => item.questionId)),
-    [wrongBookEntries],
+    () => getQuestionsByIds(favoriteEntries.map((item) => item.questionId)),
+    [favoriteEntries],
   );
 
   const questionMap = useMemo(
@@ -356,6 +341,7 @@ export function WrongBookList() {
 
   function submitAnswer(question: Question, answer: string, activityTimestamp: number) {
     const normalizedAnswer = question.type === "fill_blank" ? answer.trim() : answer;
+    const reviewedAt = new Date().toISOString();
 
     if (sessionQueue.length === 0) {
       setSessionQueue(effectiveSessionQueue);
@@ -373,48 +359,67 @@ export function WrongBookList() {
       current.includes(question.id) ? current : [...current, question.id],
     );
     setLastActivityAt(activityTimestamp);
-
-    if (!userId) {
-      return;
-    }
+    touchFavoriteReview(question.id, reviewedAt);
 
     const isCorrect =
       question.type === "fill_blank"
         ? normalizeFillBlankAnswer(normalizedAnswer) === normalizeFillBlankAnswer(question.answer)
         : normalizedAnswer === getCorrectAnswerToken(question);
 
-    void insertUserLog({
-      userId,
-      question,
-      userAnswer: normalizedAnswer,
-      isCorrect,
-      answeredAt: new Date().toISOString(),
-    });
+    if (userId) {
+      void insertUserLog({
+        userId,
+        question,
+        userAnswer: normalizedAnswer,
+        isCorrect,
+        answeredAt: reviewedAt,
+      });
+
+      const favoriteItem = useFavoritesStore.getState().items[question.id];
+      void upsertFavoriteItem({
+        userId,
+        questionId: question.id,
+        addedAt: favoriteItem?.addedAt,
+        lastReviewedAt: reviewedAt,
+      });
+    }
+
+    if (!isCorrect) {
+      const wrongItem = useWrongBookStore.getState().addWrongQuestion(question.id, userId);
+
+      if (userId) {
+        void upsertWrongBookItem({
+          userId,
+          questionId: question.id,
+          wrongCount: wrongItem.wrongCount,
+          addedAt: wrongItem.addedAt,
+          lastWrongAt: wrongItem.lastWrongAt,
+          isResolved: false,
+        });
+      }
+    }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            错题本
-          </h1>
-          <p className="text-sm leading-6 text-slate-600">
-            当前累计 {wrongBookEntries.length} 道错题，你可以直接在这里重做并手动移出。
-          </p>
-          <p className="text-xs leading-5 text-slate-500">
-            本次进入后顺序会保持稳定；离开页面或 10 分钟没有继续作答后，刚做过的题会自动轮到后面。
-          </p>
-        </div>
-
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+          收藏夹
+        </h1>
+        <p className="text-sm leading-6 text-slate-600">
+          当前累计 {favoriteEntries.length} 道收藏题，你可以把重要但还不放心的题放在这里反复看。
+        </p>
+        <p className="text-xs leading-5 text-slate-500">
+          本次进入后顺序会保持稳定；离开页面或 10 分钟没有继续作答后，刚做过的题会自动轮到后面。
+        </p>
       </div>
 
-      {wrongBookEntries.length === 0 ? (
+      {favoriteEntries.length === 0 ? (
         <Card className="rounded-[28px] border-cyan-100/80 bg-white/92 shadow-sm shadow-cyan-100/70">
           <CardContent className="space-y-4 p-8 text-center">
-            <p className="text-lg font-semibold text-slate-900">还没有错题</p>
+            <p className="text-lg font-semibold text-slate-900">还没有收藏题目</p>
             <p className="text-sm leading-6 text-slate-600">
-              继续去做今日任务吧，答错的题会自动进到这里。
+              做题时右上角点一下“收藏”，之后这里就会出现。
             </p>
             <Button
               asChild
@@ -426,7 +431,7 @@ export function WrongBookList() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {wrongBookEntries.map((item) => {
+          {favoriteEntries.map((item) => {
             const question = questionMap.get(item.questionId);
 
             if (!question) {
@@ -434,12 +439,11 @@ export function WrongBookList() {
             }
 
             return (
-              <WrongBookQuestionCard
+              <FavoriteQuestionCard
                 key={item.questionId}
                 question={question}
-                wrongCount={item.wrongCount}
                 addedAt={item.addedAt}
-                lastWrongAt={item.lastWrongAt}
+                lastReviewedAt={item.lastReviewedAt}
                 selectedAnswer={answers[item.questionId]}
                 hasAnswered={Boolean(submitted[item.questionId])}
                 onSelectAnswer={(value) => {
@@ -456,22 +460,6 @@ export function WrongBookList() {
                 onSubmitFillBlank={() =>
                   submitAnswer(question, answers[item.questionId] ?? "", Date.now())
                 }
-                onRemove={() => {
-                  const activityTimestamp = Date.now();
-                  if (sessionQueue.length === 0) {
-                    setSessionQueue(effectiveSessionQueue);
-                  }
-                  removeWrongQuestion(item.questionId);
-                  setSessionQueue((current) => current.filter((questionId) => questionId !== item.questionId));
-                  setReviewedInSession((current) =>
-                    current.filter((questionId) => questionId !== item.questionId),
-                  );
-                  setLastActivityAt(activityTimestamp);
-
-                  if (userId) {
-                    void removeWrongBookItem(userId, item.questionId);
-                  }
-                }}
               />
             );
           })}

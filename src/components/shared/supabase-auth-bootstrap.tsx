@@ -6,10 +6,12 @@ import type { Session } from "@supabase/supabase-js";
 import {
   cleanupReplacedAnonymousUser,
   fetchDailyPlans,
+  fetchFavoriteItems,
   fetchProfile,
   fetchUserLogs,
   fetchWrongBookItems,
   mapDailyPlanRowsToSnapshots,
+  mapFavoriteRowsToItems,
   mapProfileRow,
   mapUserLogRowsToSnapshots,
   mapWrongBookRowsToItems,
@@ -26,11 +28,21 @@ import {
   useSessionStore,
 } from "@/store/useSessionStore";
 import { useWrongBookStore } from "@/store/useWrongBookStore";
+import { useFavoritesStore } from "@/store/useFavoritesStore";
 import { inferTargetDateFromSnapshots, restorePlanFromSnapshots } from "@/utils/scheduler";
 import type { UserPlan } from "@/types";
 
 function getProfileUsername(userId: string) {
   return `匿名学员-${userId.slice(0, 8)}`;
+}
+
+function isMissingFavoritesTableError(message: string) {
+  return (
+    message.includes("favorites") &&
+    (message.includes("schema cache") ||
+      message.includes("does not exist") ||
+      message.includes("Could not find the table"))
+  );
 }
 
 function buildDailyPracticeSessionsFromLogs(
@@ -101,10 +113,13 @@ export function SupabaseAuthBootstrap() {
   );
   const hydrateWrongQuestions = useWrongBookStore((state) => state.hydrateWrongQuestions);
   const resetWrongQuestions = useWrongBookStore((state) => state.resetWrongQuestions);
+  const hydrateFavorites = useFavoritesStore((state) => state.hydrateFavorites);
+  const resetFavorites = useFavoritesStore((state) => state.resetFavorites);
   const resetPlan = usePlanStore((state) => state.resetPlan);
   const syncedProfileKeyRef = useRef<string | null>(null);
   const syncedPlansKeyRef = useRef<string | null>(null);
   const hydratedWrongBookUserRef = useRef<string | null>(null);
+  const hydratedFavoritesUserRef = useRef<string | null>(null);
   const hydratedPlanUserRef = useRef<string | null>(null);
   const pendingAnonymousCleanupUserRef = useRef<string | null>(null);
 
@@ -177,12 +192,14 @@ export function SupabaseAuthBootstrap() {
         syncedProfileKeyRef.current = null;
         syncedPlansKeyRef.current = null;
         hydratedWrongBookUserRef.current = null;
+        hydratedFavoritesUserRef.current = null;
         hydratedPlanUserRef.current = null;
         setCloudRestoreState(true);
         resetPlan();
         setCloudRestoreState(true);
         resetAllDailyPracticeSessions();
         resetWrongQuestions();
+        resetFavorites();
 
         if (previousWasAnonymous) {
           pendingAnonymousCleanupUserRef.current = previousUserId;
@@ -199,6 +216,7 @@ export function SupabaseAuthBootstrap() {
   }, [
     autoAnonymousEnabled,
     resetAllDailyPracticeSessions,
+    resetFavorites,
     resetPlan,
     resetWrongQuestions,
     setCloudRestoreState,
@@ -212,6 +230,7 @@ export function SupabaseAuthBootstrap() {
       syncedProfileKeyRef.current = null;
       syncedPlansKeyRef.current = null;
       hydratedWrongBookUserRef.current = null;
+      hydratedFavoritesUserRef.current = null;
       hydratedPlanUserRef.current = null;
 
       if (!autoAnonymousEnabled && status !== "loading") {
@@ -486,6 +505,42 @@ export function SupabaseAuthBootstrap() {
       isCancelled = true;
     };
   }, [hydrateWrongQuestions, setError, userId]);
+
+  useEffect(() => {
+    if (!userId || hydratedFavoritesUserRef.current === userId) {
+      return;
+    }
+
+    const currentUserId = userId;
+    let isCancelled = false;
+
+    async function hydrateFavoriteItems() {
+      const { data, error } = await fetchFavoriteItems(currentUserId);
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (error) {
+        if (isMissingFavoritesTableError(error.message)) {
+          hydratedFavoritesUserRef.current = currentUserId;
+          return;
+        }
+
+        setError(error.message);
+        return;
+      }
+
+      hydrateFavorites(mapFavoriteRowsToItems(data ?? []));
+      hydratedFavoritesUserRef.current = currentUserId;
+    }
+
+    hydrateFavoriteItems();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [hydrateFavorites, setError, userId]);
 
   if (status === "error") {
     return (

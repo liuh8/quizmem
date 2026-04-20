@@ -8,8 +8,8 @@ import {
   BookCheck,
   CircleAlert,
   Clock3,
+  Heart,
   Mail,
-  RotateCcw,
   ShieldCheck,
   LogOut,
 } from "lucide-react";
@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePlanStore } from "@/store/usePlanStore";
+import { useFavoritesStore } from "@/store/useFavoritesStore";
 import { useWrongBookStore } from "@/store/useWrongBookStore";
 import { getTodayPlan as getDerivedTodayPlan } from "@/utils/scheduler";
 
@@ -71,10 +72,10 @@ export function DashboardOverview() {
   const setEmailLoginDialogOpen = useAuthStore((state) => state.setEmailLoginDialogOpen);
   const setBindEmailPromptDismissed = useAuthStore((state) => state.setBindEmailPromptDismissed);
   const plan = usePlanStore((state) => state.plan);
-  const regeneratePlan = usePlanStore((state) => state.regeneratePlan);
   const resetPlan = usePlanStore((state) => state.resetPlan);
   const setCloudRestoreState = usePlanStore((state) => state.setCloudRestoreState);
   const wrongBookItems = useWrongBookStore((state) => state.items);
+  const favoriteItems = useFavoritesStore((state) => state.items);
   const todayPlan = useMemo(
     () => (plan ? getDerivedTodayPlan(plan) : null),
     [plan],
@@ -105,6 +106,7 @@ export function DashboardOverview() {
   const completedReviewQuestions = todayPlan.reviewQuestions.completedQuestionIds.length;
   const remainingReviewQuestions = Math.max(totalReviewQuestions - completedReviewQuestions, 0);
   const wrongBookCount = Object.keys(wrongBookItems).length;
+  const favoritesCount = Object.keys(favoriteItems).length;
 
   async function handleSignOut() {
     const supabase = getSupabaseBrowserClient();
@@ -115,6 +117,7 @@ export function DashboardOverview() {
     window.localStorage.removeItem("quizmem-plan-store");
     window.localStorage.removeItem("quizmem-session-store");
     window.localStorage.removeItem("quizmem-wrong-book-store");
+    window.localStorage.removeItem("quizmem-favorites-store");
     window.location.reload();
   }
 
@@ -123,36 +126,25 @@ export function DashboardOverview() {
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
         <Card className="overflow-hidden rounded-[28px] border-cyan-100/80 bg-white/88 shadow-lg shadow-cyan-100/70">
           <CardContent className="space-y-6 p-6 sm:p-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-3">
-                <Badge className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-medium text-cyan-800">
-                  今日任务
-                </Badge>
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-                    今天先完成新题，再处理复习。
-                  </h1>
-                  <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                    首轮目标日期是 {format(parseISO(plan.targetDate), "yyyy 年 M 月 d 日")}，系统已经按固定复习间隔为你排好了后续复习任务。
-                  </p>
-                </div>
+            <div className="space-y-3">
+              <Badge className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-medium text-cyan-800">
+                今日任务
+              </Badge>
+              <div className="space-y-2">
+                <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+                  今天先完成新题，再处理复习。
+                </h1>
+                <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                  首轮目标日期是 {format(parseISO(plan.targetDate), "yyyy 年 M 月 d 日")}，系统已经按固定复习间隔为你排好了后续复习任务。
+                </p>
               </div>
-
-              <Button
-                variant="outline"
-                className="h-11 rounded-full border-cyan-200 bg-cyan-50/70 px-5 text-sm font-semibold text-slate-700 hover:bg-cyan-100"
-                onClick={() => regeneratePlan()}
-              >
-                重新生成计划
-                <RotateCcw className="size-4" />
-              </Button>
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
               <Card className="rounded-[22px] border-teal-100 bg-teal-50/70 shadow-none">
-                <CardContent className="space-y-3 p-5">
+                <CardContent className="flex h-full flex-col gap-3 p-5">
                   <BookCheck className="size-5 text-teal-600" />
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm text-slate-600">今日需学新题</p>
                     <p className="mt-2 text-3xl font-semibold text-slate-900">
                       {completedNewQuestions} / {totalNewQuestions}
@@ -168,7 +160,7 @@ export function DashboardOverview() {
                   </div>
                   <Button
                     asChild
-                    className="h-11 w-full rounded-full bg-gradient-to-r from-teal-500 via-cyan-500 to-sky-500 text-white"
+                    className="mt-auto h-11 w-full rounded-full bg-gradient-to-r from-teal-500 via-cyan-500 to-sky-500 text-white"
                   >
                     <Link href="/practice?tab=new" className="flex w-full items-center justify-center gap-2">
                       开始学习
@@ -179,9 +171,9 @@ export function DashboardOverview() {
               </Card>
 
               <Card className="rounded-[22px] border-sky-100 bg-sky-50/70 shadow-none">
-                <CardContent className="space-y-3 p-5">
-                  <RotateCcw className="size-5 text-sky-600" />
-                  <div>
+                <CardContent className="flex h-full flex-col gap-3 p-5">
+                  <ArrowRight className="size-5 text-sky-600" />
+                  <div className="flex-1">
                     <p className="text-sm text-slate-600">今日需复习</p>
                     <p className="mt-2 text-3xl font-semibold text-slate-900">
                       {completedReviewQuestions} / {totalReviewQuestions}
@@ -193,8 +185,12 @@ export function DashboardOverview() {
                   {totalReviewQuestions > 0 ? (
                     <Button
                       asChild
-                      variant="outline"
-                      className="h-11 w-full rounded-full border-cyan-200 bg-white/80 text-slate-700 hover:bg-cyan-50"
+                      variant={remainingReviewQuestions > 0 ? "default" : "outline"}
+                      className={
+                        remainingReviewQuestions > 0
+                          ? "mt-auto h-11 w-full rounded-full bg-sky-500 text-white hover:bg-sky-600"
+                          : "mt-auto h-11 w-full rounded-full border-cyan-200 bg-white/80 text-slate-700 hover:bg-cyan-50"
+                      }
                     >
                       <Link
                         href="/practice?tab=review"
@@ -208,7 +204,7 @@ export function DashboardOverview() {
                     <Button
                       variant="outline"
                       disabled
-                      className="h-11 w-full rounded-full border-slate-200 bg-slate-100 text-slate-400"
+                      className="mt-auto h-11 w-full rounded-full border-slate-200 bg-slate-100 text-slate-400"
                     >
                       今日暂无复习
                     </Button>
@@ -232,36 +228,57 @@ export function DashboardOverview() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-[28px] border-sky-100/80 bg-white/88 shadow-lg shadow-sky-100/60">
-          <CardContent className="space-y-5 p-6">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-500">首轮进度</p>
-              <p className="text-4xl font-semibold tracking-tight text-slate-900">
-                {progress.progress}%
+        <div className="grid gap-4">
+          <Card className="rounded-[28px] border-sky-100/80 bg-white/88 shadow-lg shadow-sky-100/60">
+            <CardContent className="space-y-5 p-6">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-500">首轮进度</p>
+                <p className="text-4xl font-semibold tracking-tight text-slate-900">
+                  {progress.progress}%
+                </p>
+              </div>
+              <Progress
+                value={progress.progress}
+                className="h-3 rounded-full bg-sky-100 [&_[data-slot=progress-indicator]]:bg-gradient-to-r [&_[data-slot=progress-indicator]]:from-teal-500 [&_[data-slot=progress-indicator]]:to-sky-500"
+              />
+              <div className="space-y-2 text-sm leading-6 text-slate-600">
+                <p>
+                  已完成
+                  <span className="font-semibold text-slate-900">
+                    {` ${progress.completedCount} / ${progress.totalQuestions} `}
+                  </span>
+                  道首轮新题
+                </p>
+                <p>
+                  距离首轮学完还剩
+                  <span className="font-semibold text-slate-900">
+                    {` ${progress.remainingCount} `}
+                  </span>
+                  道，目标日期为 {format(parseISO(plan.targetDate), "yyyy 年 M 月 d 日")}。
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-[24px] border-cyan-100/80 bg-white/88 shadow-sm shadow-cyan-100/70">
+            <CardContent className="space-y-3 p-6">
+              <CircleAlert className="size-5 text-cyan-600" />
+              <h2 className="text-lg font-semibold text-slate-900">错题本</h2>
+              <p className="text-sm leading-6 text-slate-600">
+                当前累计 {wrongBookCount} 道错题，适合集中回看薄弱点。
               </p>
-            </div>
-            <Progress
-              value={progress.progress}
-              className="h-3 rounded-full bg-sky-100 [&_[data-slot=progress-indicator]]:bg-gradient-to-r [&_[data-slot=progress-indicator]]:from-teal-500 [&_[data-slot=progress-indicator]]:to-sky-500"
-            />
-            <div className="space-y-2 text-sm leading-6 text-slate-600">
-              <p>
-                已完成
-                <span className="font-semibold text-slate-900">
-                  {` ${progress.completedCount} / ${progress.totalQuestions} `}
-                </span>
-                道首轮新题
-              </p>
-              <p>
-                距离首轮学完还剩
-                <span className="font-semibold text-slate-900">
-                  {` ${progress.remainingCount} `}
-                </span>
-                道，目标日期为 {format(parseISO(plan.targetDate), "yyyy 年 M 月 d 日")}。
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+              <Button
+                asChild
+                className="h-11 w-full rounded-full bg-gradient-to-r from-teal-500 via-cyan-500 to-sky-500 text-white"
+              >
+                <Link href="/wrong-book" className="flex w-full items-center justify-center gap-2">
+                  打开错题本
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </section>
 
       {plan.summary.overloadWarning ? (
@@ -275,19 +292,19 @@ export function DashboardOverview() {
       ) : null}
 
 	      <section className="grid gap-4 md:grid-cols-4">
-	        <Card className="rounded-[24px] border-cyan-100/80 bg-white/88 shadow-sm shadow-cyan-100/70">
+	        <Card className="rounded-[24px] border-amber-100/80 bg-white/88 shadow-sm shadow-amber-100/70">
 	          <CardContent className="space-y-3 p-6">
-	            <CircleAlert className="size-5 text-cyan-600" />
-	            <h2 className="text-lg font-semibold text-slate-900">错题本</h2>
+	            <Heart className="size-5 text-amber-600" />
+	            <h2 className="text-lg font-semibold text-slate-900">收藏夹</h2>
 	            <p className="text-sm leading-6 text-slate-600">
-	              当前累计 {wrongBookCount} 道错题，适合集中回看薄弱点。
+	              当前累计 {favoritesCount} 道收藏题，适合反复回看不太放心的内容。
             </p>
             <Button
               asChild
-              className="h-11 w-full rounded-full bg-gradient-to-r from-teal-500 via-cyan-500 to-sky-500 text-white"
+              className="h-11 w-full rounded-full bg-amber-500 text-white hover:bg-amber-600"
             >
-              <Link href="/wrong-book" className="flex w-full items-center justify-center gap-2">
-                打开错题本
+              <Link href="/favorites" className="flex w-full items-center justify-center gap-2">
+                打开收藏夹
                 <ArrowRight className="size-4" />
               </Link>
 	            </Button>
