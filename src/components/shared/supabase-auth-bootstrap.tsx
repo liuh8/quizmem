@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { Session } from "@supabase/supabase-js";
 
 import {
+  cleanupReplacedAnonymousUser,
   fetchDailyPlans,
   fetchProfile,
   fetchUserLogs,
@@ -94,11 +96,17 @@ export function SupabaseAuthBootstrap() {
   const hydrateDailyPracticeSessions = useSessionStore(
     (state) => state.hydrateDailyPracticeSessions,
   );
+  const resetAllDailyPracticeSessions = useSessionStore(
+    (state) => state.resetAllDailyPracticeSessions,
+  );
   const hydrateWrongQuestions = useWrongBookStore((state) => state.hydrateWrongQuestions);
+  const resetWrongQuestions = useWrongBookStore((state) => state.resetWrongQuestions);
+  const resetPlan = usePlanStore((state) => state.resetPlan);
   const syncedProfileKeyRef = useRef<string | null>(null);
   const syncedPlansKeyRef = useRef<string | null>(null);
   const hydratedWrongBookUserRef = useRef<string | null>(null);
   const hydratedPlanUserRef = useRef<string | null>(null);
+  const pendingAnonymousCleanupUserRef = useRef<string | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -157,6 +165,30 @@ export function SupabaseAuthBootstrap() {
         return;
       }
 
+      const previousSession = useAuthStore.getState().session;
+      const previousUserId = previousSession?.user.id ?? null;
+      const previousWasAnonymous = Boolean(
+        (previousSession?.user as Session["user"] & { is_anonymous?: boolean } | undefined)
+          ?.is_anonymous,
+      );
+      const nextUserId = session?.user.id ?? null;
+
+      if (previousUserId && nextUserId && previousUserId !== nextUserId) {
+        syncedProfileKeyRef.current = null;
+        syncedPlansKeyRef.current = null;
+        hydratedWrongBookUserRef.current = null;
+        hydratedPlanUserRef.current = null;
+        setCloudRestoreState(true);
+        resetPlan();
+        setCloudRestoreState(true);
+        resetAllDailyPracticeSessions();
+        resetWrongQuestions();
+
+        if (previousWasAnonymous) {
+          pendingAnonymousCleanupUserRef.current = previousUserId;
+        }
+      }
+
       setSession(session);
     });
 
@@ -164,7 +196,16 @@ export function SupabaseAuthBootstrap() {
       isCancelled = true;
       subscription.unsubscribe();
     };
-  }, [autoAnonymousEnabled, setCloudRestoreState, setError, setLoading, setSession]);
+  }, [
+    autoAnonymousEnabled,
+    resetAllDailyPracticeSessions,
+    resetPlan,
+    resetWrongQuestions,
+    setCloudRestoreState,
+    setError,
+    setLoading,
+    setSession,
+  ]);
 
   useEffect(() => {
     if (!userId) {
@@ -182,6 +223,10 @@ export function SupabaseAuthBootstrap() {
     }
 
     if (isRestoringFromCloud) {
+      return;
+    }
+
+    if (hydratedPlanUserRef.current !== userId) {
       return;
     }
 
@@ -323,8 +368,49 @@ export function SupabaseAuthBootstrap() {
   ]);
 
   useEffect(() => {
+    if (!userId || pendingAnonymousCleanupUserRef.current === null) {
+      return;
+    }
+
+    const oldAnonymousUserId = pendingAnonymousCleanupUserRef.current;
+
+    if (oldAnonymousUserId === userId) {
+      pendingAnonymousCleanupUserRef.current = null;
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function cleanupAnonymousData() {
+      const { error } = await cleanupReplacedAnonymousUser(oldAnonymousUserId);
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (error) {
+        console.error("Failed to clean up replaced anonymous user data:", error.message);
+        pendingAnonymousCleanupUserRef.current = null;
+        return;
+      }
+
+      pendingAnonymousCleanupUserRef.current = null;
+    }
+
+    cleanupAnonymousData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [userId]);
+
+  useEffect(() => {
     if (!userId || !plan || isRestoringFromCloud) {
       syncedPlansKeyRef.current = null;
+      return;
+    }
+
+    if (hydratedPlanUserRef.current !== userId) {
       return;
     }
 

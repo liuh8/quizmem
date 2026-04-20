@@ -58,6 +58,14 @@ export async function fetchProfile(userId: string) {
   return supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
 }
 
+export async function cleanupReplacedAnonymousUser(oldUserId: string) {
+  const supabase = getSupabaseBrowserClient();
+
+  return supabase.rpc("cleanup_replaced_anonymous_user", {
+    old_user_id: oldUserId,
+  });
+}
+
 export async function upsertDailyPlans(userId: string, dailyPlans: DailyPlan[]) {
   const supabase = getSupabaseBrowserClient();
 

@@ -11,6 +11,7 @@ interface WrongBookActions {
   addWrongQuestion: (questionId: number, userId?: string | null) => WrongBookItem;
   removeWrongQuestion: (questionId: number) => void;
   hydrateWrongQuestions: (items: WrongBookItem[]) => void;
+  resetWrongQuestions: () => void;
   getWrongQuestions: () => WrongBookItem[];
 }
 
@@ -91,6 +92,12 @@ export const useWrongBookStore = create<WrongBookStore>()(
           return {
             items: nextItems,
           };
+        });
+      },
+
+      resetWrongQuestions: () => {
+        set({
+          items: {},
         });
       },
 

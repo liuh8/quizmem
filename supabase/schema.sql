@@ -101,3 +101,39 @@ create policy "daily_plans_all_own"
 on public.daily_plans for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
+
+create or replace function public.cleanup_replaced_anonymous_user(old_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  old_user_is_anonymous boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  if old_user_id is null or old_user_id = auth.uid() then
+    return;
+  end if;
+
+  select coalesce(users.is_anonymous, false)
+    into old_user_is_anonymous
+  from auth.users as users
+  where users.id = old_user_id;
+
+  if not coalesce(old_user_is_anonymous, false) then
+    return;
+  end if;
+
+  delete from public.wrong_books where user_id = old_user_id;
+  delete from public.user_logs where user_id = old_user_id;
+  delete from public.daily_plans where user_id = old_user_id;
+  delete from public.profiles where id = old_user_id;
+end;
+$$;
+
+revoke all on function public.cleanup_replaced_anonymous_user(uuid) from public;
+grant execute on function public.cleanup_replaced_anonymous_user(uuid) to authenticated;

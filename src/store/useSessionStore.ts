@@ -34,6 +34,7 @@ interface SessionStoreActions {
       | ((current: DailyPracticeSession) => Partial<DailyPracticeSession>),
   ) => void;
   resetDailyPracticeSession: (date: string) => void;
+  resetAllDailyPracticeSessions: () => void;
   hydrateDailyPracticeSessions: (sessions: Record<string, DailyPracticeSession>) => void;
   getFillBlankPreviewSession: () => FillBlankPreviewSession;
   patchFillBlankPreviewSession: (
@@ -94,6 +95,12 @@ export const useSessionStore = create<SessionStore>()(
             [date]: createEmptyDailyPracticeSession(),
           },
         }));
+      },
+
+      resetAllDailyPracticeSessions: () => {
+        set({
+          dailyPracticeByDate: {},
+        });
       },
 
       hydrateDailyPracticeSessions: (sessions) => {

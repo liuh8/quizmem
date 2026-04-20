@@ -377,6 +377,30 @@ Append-only project log. Each entry records:
   - `src/components/practice/fill-blank-preview.tsx`
   - `src/components/shared/bind-email-dialog.tsx`
 
+## 2026-04-20-11-10
+
+- Completed:
+  - Fixed the account-switch restore path so a newly logged-in `userId` now hydrates plan/session data before any profile or daily-plan sync can run
+  - Added local store resets for daily practice sessions and wrong-book state when the authenticated user changes
+  - Added a Supabase RPC helper and schema function to clean business-table data for a replaced anonymous user after login
+  - Re-verified the project with `pnpm exec eslint .` and `pnpm build --webpack`
+- Why:
+  - Users could anonymously enter the app, then log into an existing account and still see the anonymous user's today's plan
+  - The root cause was a race between “sync current local plan” and “hydrate the new user's cloud plan”
+  - Repeated anonymous-then-login flows could leave behind stale anonymous rows in `profiles`, `daily_plans`, `user_logs`, and `wrong_books`
+- Decisions:
+  - Account switching now trusts the new `userId` cloud state first and blocks plan/profile syncing until that hydration completes
+  - Anonymous cleanup is scoped to business tables only for now; `auth.users` rows are intentionally left untouched
+  - The cleanup path uses a dedicated SQL function so the app can remove old anonymous business data after the session has switched to the real user
+- Files touched:
+  - `docs/change-log.md`
+  - `supabase/schema.sql`
+  - `src/components/shared/supabase-auth-bootstrap.tsx`
+  - `src/lib/supabase/queries.ts`
+  - `src/store/useSessionStore.ts`
+  - `src/store/useWrongBookStore.ts`
+  - `src/types/supabase.ts`
+
 ## 2026-04-16-11-20
 
 - Completed:
