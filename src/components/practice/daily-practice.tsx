@@ -21,6 +21,7 @@ import {
 } from "@/store/useSessionStore";
 import { useWrongBookStore } from "@/store/useWrongBookStore";
 import { normalizeFillBlankAnswer } from "@/utils/answer";
+import { getTodayPlan as getDerivedTodayPlan } from "@/utils/scheduler";
 import type { Question } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -259,8 +260,11 @@ export function DailyPractice({
 }: {
   initialTab?: "new" | "review";
 }) {
-  const todayPlan = usePlanStore((state) => state.getTodayPlan());
   const plan = usePlanStore((state) => state.plan);
+  const todayPlan = useMemo(
+    () => (plan ? getDerivedTodayPlan(plan) : null),
+    [plan],
+  );
   const moveNextNewQuestionToToday = usePlanStore((state) => state.moveNextNewQuestionToToday);
   const completeQuestion = usePlanStore((state) => state.completeQuestion);
   const userId = useAuthStore((state) => state.userId);

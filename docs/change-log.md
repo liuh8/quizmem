@@ -377,6 +377,27 @@ Append-only project log. Each entry records:
   - `src/components/practice/fill-blank-preview.tsx`
   - `src/components/shared/bind-email-dialog.tsx`
 
+## 2026-04-20-15-05
+
+- Completed:
+  - Reworked the dashboard progress card to track first-pass completion by questions finished rather than by elapsed days
+  - Updated today's derived plan so unfinished new questions roll forward into the next day instead of disappearing behind the calendar
+  - Prevented review tasks from showing up before the underlying new question has actually been completed
+  - Shifted each question's review schedule to start from its real completion date when the user finishes it later than originally planned
+  - Re-verified the project with `pnpm exec eslint .` and `pnpm build --webpack`
+- Why:
+  - The old day-based progress bar had low information value and did not reflect actual learning progress
+  - The previous scheduler treated uncompleted new questions as if they had already entered the review cycle, which made the plan drift away from real study behavior
+- Decisions:
+  - The primary homepage progress indicator is now `已完成 X / 300 道首轮新题`
+  - Today's new-task count now includes overdue unfinished new questions from earlier dates
+  - Review tasks only become eligible after a new question is truly completed, and delayed completions push later reviews back accordingly
+- Files touched:
+  - `docs/change-log.md`
+  - `src/components/dashboard/dashboard-overview.tsx`
+  - `src/store/usePlanStore.ts`
+  - `src/utils/scheduler.ts`
+
 ## 2026-04-20-11-10
 
 - Completed:

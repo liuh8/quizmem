@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import {
   BookOpenText,
@@ -9,7 +10,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getQuestionsByIds } from "@/lib/questions";
 import { insertUserLog, removeWrongBookItem } from "@/lib/supabase/queries";
@@ -26,6 +27,8 @@ const QUESTION_TYPE_LABELS: Record<Question["type"], string> = {
   single_choice: "单选题",
   judgment: "判断题",
 };
+
+const SESSION_IDLE_MS = 10 * 60 * 1000;
 
 function getCorrectAnswerToken(question: Question) {
   if (question.type === "single_choice") {
@@ -238,20 +241,104 @@ function WrongBookQuestionCard({
 }
 
 export function WrongBookList() {
+  const pathname = usePathname();
   const userId = useAuthStore((state) => state.userId);
   const wrongBookItems = useWrongBookStore((state) => state.items);
+  const queueOrder = useWrongBookStore((state) => state.queueOrder);
   const removeWrongQuestion = useWrongBookStore((state) => state.removeWrongQuestion);
+  const setQueueOrder = useWrongBookStore((state) => state.setQueueOrder);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [submitted, setSubmitted] = useState<Record<number, boolean>>({});
+  const [sessionQueue, setSessionQueue] = useState<number[]>([]);
+  const [reviewedInSession, setReviewedInSession] = useState<number[]>([]);
+  const [lastActivityAt, setLastActivityAt] = useState<number | null>(null);
+  const finalizedRef = useRef(false);
+  const sessionQueueRef = useRef<number[]>([]);
+  const reviewedInSessionRef = useRef<number[]>([]);
 
-  const wrongBookEntries = useMemo(
+  const sortedFallbackQueue = useMemo(
     () =>
-      Object.values(wrongBookItems).sort(
-        (left, right) =>
-          new Date(right.lastWrongAt).getTime() - new Date(left.lastWrongAt).getTime(),
-      ),
+      Object.values(wrongBookItems)
+        .sort(
+          (left, right) =>
+            new Date(right.lastWrongAt).getTime() - new Date(left.lastWrongAt).getTime(),
+        )
+        .map((item) => item.questionId),
     [wrongBookItems],
   );
+  const orderedQueue = useMemo(() => {
+    const knownIds = new Set(Object.keys(wrongBookItems).map(Number));
+
+    return [
+      ...queueOrder.filter((questionId) => knownIds.has(questionId)),
+      ...sortedFallbackQueue.filter((questionId) => !queueOrder.includes(questionId)),
+    ];
+  }, [queueOrder, sortedFallbackQueue, wrongBookItems]);
+  const effectiveSessionQueue = sessionQueue.length > 0 ? sessionQueue : orderedQueue;
+
+  useEffect(() => {
+    sessionQueueRef.current = effectiveSessionQueue;
+  }, [effectiveSessionQueue]);
+
+  useEffect(() => {
+    reviewedInSessionRef.current = reviewedInSession;
+  }, [reviewedInSession]);
+
+  const finalizeSessionQueue = useCallback((startNextSession = false) => {
+    if (finalizedRef.current || reviewedInSessionRef.current.length === 0) {
+      return;
+    }
+
+    finalizedRef.current = true;
+
+    const reviewedSet = new Set(reviewedInSessionRef.current);
+    const nextQueue = [
+      ...sessionQueueRef.current.filter((questionId) => !reviewedSet.has(questionId)),
+      ...sessionQueueRef.current.filter((questionId) => reviewedSet.has(questionId)),
+    ];
+
+    setQueueOrder(nextQueue);
+    if (startNextSession) {
+      setSessionQueue(nextQueue);
+      setReviewedInSession([]);
+      setLastActivityAt(null);
+      finalizedRef.current = false;
+    }
+  }, [setQueueOrder]);
+
+  useEffect(() => {
+    finalizedRef.current = false;
+  }, [pathname, reviewedInSession.length, sessionQueue]);
+
+  useEffect(() => {
+    return () => {
+      finalizeSessionQueue();
+    };
+  }, [finalizeSessionQueue]);
+
+  useEffect(() => {
+    if (!lastActivityAt || reviewedInSession.length === 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      finalizeSessionQueue(true);
+    }, SESSION_IDLE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [finalizeSessionQueue, lastActivityAt, reviewedInSession, sessionQueue]);
+
+  const wrongBookEntries = useMemo(() => {
+    const itemMap = new Map(
+      Object.values(wrongBookItems).map((item) => [item.questionId, item]),
+    );
+
+    return effectiveSessionQueue
+      .map((questionId) => itemMap.get(questionId))
+      .filter((item): item is typeof wrongBookItems[number] => Boolean(item));
+  }, [effectiveSessionQueue, wrongBookItems]);
 
   const questions = useMemo(
     () => getQuestionsByIds(wrongBookEntries.map((item) => item.questionId)),
@@ -263,8 +350,12 @@ export function WrongBookList() {
     [questions],
   );
 
-  function submitAnswer(question: Question, answer: string) {
+  function submitAnswer(question: Question, answer: string, activityTimestamp: number) {
     const normalizedAnswer = question.type === "fill_blank" ? answer.trim() : answer;
+
+    if (sessionQueue.length === 0) {
+      setSessionQueue(effectiveSessionQueue);
+    }
 
     setSubmitted((current) => ({
       ...current,
@@ -274,6 +365,10 @@ export function WrongBookList() {
       ...current,
       [question.id]: normalizedAnswer,
     }));
+    setReviewedInSession((current) =>
+      current.includes(question.id) ? current : [...current, question.id],
+    );
+    setLastActivityAt(activityTimestamp);
 
     if (!userId) {
       return;
@@ -302,6 +397,9 @@ export function WrongBookList() {
           </h1>
           <p className="text-sm leading-6 text-slate-600">
             当前累计 {wrongBookEntries.length} 道错题，你可以直接在这里重做并手动移出。
+          </p>
+          <p className="text-xs leading-5 text-slate-500">
+            本次进入后顺序会保持稳定；离开页面或 10 分钟没有继续作答后，刚做过的题会自动轮到后面。
           </p>
         </div>
 
@@ -349,11 +447,22 @@ export function WrongBookList() {
                     return;
                   }
 
-                  submitAnswer(question, value);
+                  submitAnswer(question, value, Date.now());
                 }}
-                onSubmitFillBlank={() => submitAnswer(question, answers[item.questionId] ?? "")}
+                onSubmitFillBlank={() =>
+                  submitAnswer(question, answers[item.questionId] ?? "", Date.now())
+                }
                 onRemove={() => {
+                  const activityTimestamp = Date.now();
+                  if (sessionQueue.length === 0) {
+                    setSessionQueue(effectiveSessionQueue);
+                  }
                   removeWrongQuestion(item.questionId);
+                  setSessionQueue((current) => current.filter((questionId) => questionId !== item.questionId));
+                  setReviewedInSession((current) =>
+                    current.filter((questionId) => questionId !== item.questionId),
+                  );
+                  setLastActivityAt(activityTimestamp);
 
                   if (userId) {
                     void removeWrongBookItem(userId, item.questionId);

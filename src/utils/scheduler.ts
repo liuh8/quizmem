@@ -57,6 +57,10 @@ function createDailyPlan(date: Date): DailyPlan {
   };
 }
 
+function uniqueQuestionIds(questionIds: number[]) {
+  return [...new Set(questionIds)];
+}
+
 function ensureDailyPlan(planMap: Map<ISODateString, DailyPlan>, date: Date) {
   const key = toISODateString(date);
   const existing = planMap.get(key);
@@ -199,7 +203,86 @@ export function getDailyPlan(userPlan: UserPlan, date: Date | ISODateString) {
 }
 
 export function getTodayPlan(userPlan: UserPlan, today: Date | ISODateString = new Date()) {
-  return getDailyPlan(userPlan, today);
+  const todayDate = toStartOfDay(today);
+  const todayKey = toISODateString(todayDate);
+  const scheduledTodayPlan = getDailyPlan(userPlan, todayDate) ?? createDailyPlan(todayDate);
+  const learnedQuestionIds = new Set(
+    userPlan.dailyPlans.flatMap((dailyPlan) => dailyPlan.newQuestions.completedQuestionIds),
+  );
+  const orderedFirstPassQuestionIds = uniqueQuestionIds(
+    userPlan.dailyPlans
+      .filter((dailyPlan) => dailyPlan.date <= userPlan.targetDate)
+      .flatMap((dailyPlan) => dailyPlan.newQuestions.questionIds),
+  );
+  const firstUnfinishedQuestionIndex = orderedFirstPassQuestionIds.findIndex(
+    (questionId) => !learnedQuestionIds.has(questionId),
+  );
+  const remainingNewQuestionCount = orderedFirstPassQuestionIds.filter(
+    (questionId) => !learnedQuestionIds.has(questionId),
+  ).length;
+  const remainingFirstPassDays = Math.max(
+    differenceInCalendarDays(parseISO(userPlan.targetDate), todayDate) + 1,
+    1,
+  );
+  const todayNewTargetCount =
+    remainingNewQuestionCount === 0
+      ? 0
+      : Math.min(
+          remainingNewQuestionCount,
+          Math.ceil(remainingNewQuestionCount / remainingFirstPassDays),
+        );
+  const todayNewTargetQuestionIds =
+    firstUnfinishedQuestionIndex === -1
+      ? []
+      : orderedFirstPassQuestionIds.slice(
+          firstUnfinishedQuestionIndex,
+          firstUnfinishedQuestionIndex + todayNewTargetCount,
+        );
+  const extraNewQuestionIds = scheduledTodayPlan.newQuestions.questionIds.filter(
+    (questionId) => !todayNewTargetQuestionIds.includes(questionId),
+  );
+  const todayNewQuestionIds = uniqueQuestionIds([
+    ...todayNewTargetQuestionIds,
+    ...extraNewQuestionIds,
+  ]);
+  const todayCompletedNewQuestionIds = uniqueQuestionIds(
+    scheduledTodayPlan.newQuestions.completedQuestionIds.filter((questionId) =>
+      todayNewQuestionIds.includes(questionId),
+    ),
+  );
+
+  const overdueReviewQuestionIds = uniqueQuestionIds(
+    userPlan.dailyPlans
+      .filter((dailyPlan) => dailyPlan.date < todayKey)
+      .flatMap((dailyPlan) =>
+        dailyPlan.reviewQuestions.questionIds.filter(
+          (questionId) =>
+            learnedQuestionIds.has(questionId) &&
+            !dailyPlan.reviewQuestions.completedQuestionIds.includes(questionId),
+        ),
+      ),
+  );
+
+  const todayReviewQuestionIds = uniqueQuestionIds([
+    ...overdueReviewQuestionIds,
+    ...scheduledTodayPlan.reviewQuestions.questionIds.filter((questionId) =>
+      learnedQuestionIds.has(questionId),
+    ),
+  ]);
+
+  return {
+    ...scheduledTodayPlan,
+    newQuestions: {
+      ...scheduledTodayPlan.newQuestions,
+      questionIds: todayNewQuestionIds,
+      targetQuestionIds: todayNewTargetQuestionIds,
+      completedQuestionIds: todayCompletedNewQuestionIds,
+    },
+    reviewQuestions: {
+      ...scheduledTodayPlan.reviewQuestions,
+      questionIds: todayReviewQuestionIds,
+    },
+  };
 }
 
 function buildReviewQueueFromDailyPlans(

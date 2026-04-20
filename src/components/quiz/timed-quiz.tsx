@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, BookOpenText, CheckCircle2, Clock3, RotateCcw, XCircle } from "lucide-react";
 
 import { getQuestionBank, getQuestionsByIds } from "@/lib/questions";
@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { usePlanStore } from "@/store/usePlanStore";
 import { useWrongBookStore } from "@/store/useWrongBookStore";
 import { normalizeFillBlankAnswer } from "@/utils/answer";
+import { getTodayPlan as getDerivedTodayPlan } from "@/utils/scheduler";
 import type { Question, QuestionType } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,7 +117,11 @@ function getScoreSummary(questions: Question[], answers: Record<number, QuizAnsw
 
 export function TimedQuiz() {
   const userId = useAuthStore((state) => state.userId);
-  const todayPlan = usePlanStore((state) => state.getTodayPlan());
+  const plan = usePlanStore((state) => state.plan);
+  const todayPlan = useMemo(
+    () => (plan ? getDerivedTodayPlan(plan) : null),
+    [plan],
+  );
   const [roundSeed, setRoundSeed] = useState(0);
   const [quizQuestions, setQuizQuestions] = useState(() =>
     buildTimedQuizQuestions(todayPlan?.reviewQuestions.questionIds ?? [], roundSeed),

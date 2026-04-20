@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { differenceInCalendarDays, format, parseISO, startOfDay } from "date-fns";
 import {
   ArrowRight,
@@ -21,19 +22,45 @@ import { Progress } from "@/components/ui/progress";
 import { useAuthStore } from "@/store/useAuthStore";
 import { usePlanStore } from "@/store/usePlanStore";
 import { useWrongBookStore } from "@/store/useWrongBookStore";
+import { getTodayPlan as getDerivedTodayPlan } from "@/utils/scheduler";
 
-function calculateFirstPassProgress(startDate: string, targetDate: string) {
-  const today = startOfDay(new Date());
-  const start = parseISO(startDate);
-  const target = parseISO(targetDate);
-  const totalDays = Math.max(differenceInCalendarDays(target, start) + 1, 1);
-  const elapsedDays = Math.min(Math.max(differenceInCalendarDays(today, start) + 1, 0), totalDays);
+function calculateFirstPassProgress(plan: NonNullable<ReturnType<typeof usePlanStore.getState>["plan"]>) {
+  const completedNewQuestionIds = new Set(
+    plan.dailyPlans.flatMap((dailyPlan) => dailyPlan.newQuestions.completedQuestionIds),
+  );
+  const completedCount = completedNewQuestionIds.size;
+  const totalQuestions = plan.summary.totalNewQuestionCount;
 
   return {
-    totalDays,
-    elapsedDays,
-    progress: Math.round((elapsedDays / totalDays) * 100),
+    completedCount,
+    totalQuestions,
+    remainingCount: Math.max(totalQuestions - completedCount, 0),
+    progress:
+      totalQuestions > 0
+        ? Math.round((completedCount / totalQuestions) * 100)
+        : 0,
   };
+}
+
+function getCarryoverNewQuestionCount(
+  plan: NonNullable<ReturnType<typeof usePlanStore.getState>["plan"]>,
+  todayQuestionIds: number[],
+) {
+  const todayKey = format(startOfDay(new Date()), "yyyy-MM-dd");
+  const scheduledDateByQuestionId = new Map<number, string>();
+
+  plan.dailyPlans.forEach((dailyPlan) => {
+    dailyPlan.newQuestions.questionIds.forEach((questionId) => {
+      if (!scheduledDateByQuestionId.has(questionId)) {
+        scheduledDateByQuestionId.set(questionId, dailyPlan.date);
+      }
+    });
+  });
+
+  return todayQuestionIds.filter((questionId) => {
+    const scheduledDate = scheduledDateByQuestionId.get(questionId);
+    return scheduledDate ? scheduledDate < todayKey : false;
+  }).length;
 }
 
 export function DashboardOverview() {
@@ -44,23 +71,27 @@ export function DashboardOverview() {
   const setEmailLoginDialogOpen = useAuthStore((state) => state.setEmailLoginDialogOpen);
   const setBindEmailPromptDismissed = useAuthStore((state) => state.setBindEmailPromptDismissed);
   const plan = usePlanStore((state) => state.plan);
-  const todayPlan = usePlanStore((state) => state.getTodayPlan());
   const regeneratePlan = usePlanStore((state) => state.regeneratePlan);
   const resetPlan = usePlanStore((state) => state.resetPlan);
   const setCloudRestoreState = usePlanStore((state) => state.setCloudRestoreState);
   const wrongBookItems = useWrongBookStore((state) => state.items);
+  const todayPlan = useMemo(
+    () => (plan ? getDerivedTodayPlan(plan) : null),
+    [plan],
+  );
 
   if (!plan || !todayPlan) {
     return null;
   }
 
-  const progress = calculateFirstPassProgress(plan.startDate, plan.targetDate);
+  const progress = calculateFirstPassProgress(plan);
   const remainingFirstPassDays = Math.max(
     differenceInCalendarDays(parseISO(plan.targetDate), startOfDay(new Date())) + 1,
     0,
   );
   const targetNewQuestionIds =
     todayPlan.newQuestions.targetQuestionIds ?? todayPlan.newQuestions.questionIds;
+  const carryoverNewQuestionCount = getCarryoverNewQuestionCount(plan, targetNewQuestionIds);
   const totalNewQuestions = targetNewQuestionIds.length;
   const completedTargetNewQuestions = targetNewQuestionIds.filter((questionId) =>
     todayPlan.newQuestions.completedQuestionIds.includes(questionId),
@@ -129,6 +160,11 @@ export function DashboardOverview() {
                     <p className="mt-1 text-xs text-slate-500">
                       还剩 {remainingNewQuestions} 题
                     </p>
+                    {carryoverNewQuestionCount > 0 ? (
+                      <p className="mt-1 text-xs text-amber-700">
+                        含前面顺延的 {carryoverNewQuestionCount} 道新题
+                      </p>
+                    ) : null}
                   </div>
                   <Button
                     asChild
@@ -210,16 +246,18 @@ export function DashboardOverview() {
             />
             <div className="space-y-2 text-sm leading-6 text-slate-600">
               <p>
-                已进入第 <span className="font-semibold text-slate-900">{progress.elapsedDays}</span> /
-                {` `}
-                <span className="font-semibold text-slate-900">{progress.totalDays}</span> 天
+                已完成
+                <span className="font-semibold text-slate-900">
+                  {` ${progress.completedCount} / ${progress.totalQuestions} `}
+                </span>
+                道首轮新题
               </p>
               <p>
-                计划总复习次数约为
+                距离首轮学完还剩
                 <span className="font-semibold text-slate-900">
-                  {` ${plan.summary.totalReviewQuestionCount} `}
+                  {` ${progress.remainingCount} `}
                 </span>
-                次。
+                道，目标日期为 {format(parseISO(plan.targetDate), "yyyy 年 M 月 d 日")}。
               </p>
             </div>
           </CardContent>

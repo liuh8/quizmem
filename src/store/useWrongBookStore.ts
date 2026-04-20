@@ -5,6 +5,7 @@ import type { WrongBookItem } from "@/types";
 
 interface WrongBookState {
   items: Record<number, WrongBookItem>;
+  queueOrder: number[];
 }
 
 interface WrongBookActions {
@@ -12,6 +13,7 @@ interface WrongBookActions {
   removeWrongQuestion: (questionId: number) => void;
   hydrateWrongQuestions: (items: WrongBookItem[]) => void;
   resetWrongQuestions: () => void;
+  setQueueOrder: (questionIds: number[]) => void;
   getWrongQuestions: () => WrongBookItem[];
 }
 
@@ -21,6 +23,7 @@ export const useWrongBookStore = create<WrongBookStore>()(
   persist(
     (set, get) => ({
       items: {},
+      queueOrder: [],
 
       addWrongQuestion: (questionId, userId) => {
         const existing = get().items[questionId];
@@ -47,6 +50,9 @@ export const useWrongBookStore = create<WrongBookStore>()(
             ...state.items,
             [questionId]: nextItem,
           },
+          queueOrder: state.queueOrder.includes(questionId)
+            ? state.queueOrder
+            : [...state.queueOrder, questionId],
         }));
 
         return nextItem;
@@ -59,6 +65,7 @@ export const useWrongBookStore = create<WrongBookStore>()(
 
           return {
             items: nextItems,
+            queueOrder: state.queueOrder.filter((id) => id !== questionId),
           };
         });
       },
@@ -66,6 +73,7 @@ export const useWrongBookStore = create<WrongBookStore>()(
       hydrateWrongQuestions: (items) => {
         set((state) => {
           const nextItems = { ...state.items };
+          const nextQueueOrder = [...state.queueOrder];
 
           for (const item of items) {
             const existing = nextItems[item.questionId];
@@ -85,12 +93,24 @@ export const useWrongBookStore = create<WrongBookStore>()(
                   }
                 : {
                     ...item,
-                    wrongCount: Math.max(existing.wrongCount, item.wrongCount),
+                  wrongCount: Math.max(existing.wrongCount, item.wrongCount),
                   };
           }
 
+          items
+            .sort(
+              (left, right) =>
+                new Date(right.lastWrongAt).getTime() - new Date(left.lastWrongAt).getTime(),
+            )
+            .forEach((item) => {
+              if (!nextQueueOrder.includes(item.questionId)) {
+                nextQueueOrder.push(item.questionId);
+              }
+            });
+
           return {
             items: nextItems,
+            queueOrder: nextQueueOrder.filter((questionId) => questionId in nextItems),
           };
         });
       },
@@ -98,6 +118,17 @@ export const useWrongBookStore = create<WrongBookStore>()(
       resetWrongQuestions: () => {
         set({
           items: {},
+          queueOrder: [],
+        });
+      },
+
+      setQueueOrder: (questionIds) => {
+        const itemIds = new Set(Object.keys(get().items).map(Number));
+        const normalizedQueue = questionIds.filter((questionId) => itemIds.has(questionId));
+        const remainingIds = [...itemIds].filter((questionId) => !normalizedQueue.includes(questionId));
+
+        set({
+          queueOrder: [...normalizedQueue, ...remainingIds],
         });
       },
 

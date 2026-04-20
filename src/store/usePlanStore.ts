@@ -40,50 +40,30 @@ interface PlanStoreActions {
 
 export type PlanStore = PlanStoreState & PlanStoreActions;
 
-function markQuestionAsCompleted(plan: UserPlan, date: ISODateString, questionId: number, taskType: "new" | "review") {
-  const nextDailyPlans = plan.dailyPlans.map((dailyPlan) => {
-    if (dailyPlan.date !== date) {
-      return dailyPlan;
-    }
+function toISODateString(date: Date) {
+  return format(date, DATE_FORMAT);
+}
 
-    const bucket =
-      taskType === "new" ? dailyPlan.newQuestions : dailyPlan.reviewQuestions;
-
-    if (
-      !bucket.questionIds.includes(questionId) ||
-      bucket.completedQuestionIds.includes(questionId)
-    ) {
-      return dailyPlan;
-    }
-
-    const nextBucket = {
-      ...bucket,
-      completedQuestionIds: [...bucket.completedQuestionIds, questionId],
-    };
-
-    const nextDailyPlan =
-      taskType === "new"
-        ? { ...dailyPlan, newQuestions: nextBucket }
-        : { ...dailyPlan, reviewQuestions: nextBucket };
-
-    return {
-      ...nextDailyPlan,
-      isCompleted:
-        nextDailyPlan.newQuestions.completedQuestionIds.length ===
-          nextDailyPlan.newQuestions.questionIds.length &&
-        nextDailyPlan.reviewQuestions.completedQuestionIds.length ===
-          nextDailyPlan.reviewQuestions.questionIds.length,
-    };
-  });
-
+function createTaskBucket(type: "new" | "review") {
   return {
-    ...plan,
-    dailyPlans: nextDailyPlans,
+    type,
+    questionIds: [] as number[],
+    targetQuestionIds: [] as number[],
+    completedQuestionIds: [] as number[],
   };
 }
 
-function toISODateString(date: Date) {
-  return format(date, DATE_FORMAT);
+function createDailyPlan(date: ISODateString): DailyPlan {
+  return {
+    date,
+    newQuestions: createTaskBucket("new"),
+    reviewQuestions: createTaskBucket("review"),
+    isCompleted: false,
+  };
+}
+
+function uniqueQuestionIds(questionIds: number[]) {
+  return [...new Set(questionIds)];
 }
 
 function removeQuestionId(list: number[], questionId: number) {
@@ -92,6 +72,233 @@ function removeQuestionId(list: number[], questionId: number) {
 
 function getTargetQuestionIds(questionIds: number[], targetQuestionIds?: number[]) {
   return targetQuestionIds ?? questionIds;
+}
+
+function syncDailyPlanCompletion(dailyPlan: DailyPlan) {
+  return {
+    ...dailyPlan,
+    isCompleted:
+      dailyPlan.newQuestions.completedQuestionIds.length ===
+        dailyPlan.newQuestions.questionIds.length &&
+      dailyPlan.reviewQuestions.completedQuestionIds.length ===
+        dailyPlan.reviewQuestions.questionIds.length,
+  };
+}
+
+function syncPlanSummary(plan: UserPlan) {
+  return {
+    ...plan,
+    summary: {
+      ...plan.summary,
+      generatedPlanDays: plan.dailyPlans.length,
+      totalReviewQuestionCount: plan.reviewQueue.length,
+      maxNewQuestionsPerDay: Math.max(
+        ...plan.dailyPlans.map((dailyPlan) => dailyPlan.newQuestions.questionIds.length),
+        0,
+      ),
+    },
+  };
+}
+
+function ensureDailyPlansExist(
+  dailyPlans: DailyPlan[],
+  dates: ISODateString[],
+) {
+  const existingDates = new Set(dailyPlans.map((dailyPlan) => dailyPlan.date));
+  const nextDailyPlans = [...dailyPlans];
+
+  dates.forEach((date) => {
+    if (!existingDates.has(date)) {
+      existingDates.add(date);
+      nextDailyPlans.push(createDailyPlan(date));
+    }
+  });
+
+  return nextDailyPlans.sort((left, right) => left.date.localeCompare(right.date));
+}
+
+function findQuestionPlanDate(
+  plan: UserPlan,
+  questionId: number,
+  taskType: "new" | "review",
+  preferredDate?: ISODateString,
+) {
+  const matchedPreferred = preferredDate
+    ? plan.dailyPlans.find((dailyPlan) => {
+        const bucket = taskType === "new" ? dailyPlan.newQuestions : dailyPlan.reviewQuestions;
+        return dailyPlan.date === preferredDate && bucket.questionIds.includes(questionId);
+      })
+    : null;
+
+  if (matchedPreferred) {
+    return matchedPreferred.date;
+  }
+
+  return (
+    plan.dailyPlans.find((dailyPlan) => {
+      const bucket = taskType === "new" ? dailyPlan.newQuestions : dailyPlan.reviewQuestions;
+      return (
+        bucket.questionIds.includes(questionId) &&
+        !bucket.completedQuestionIds.includes(questionId)
+      );
+    })?.date ?? null
+  );
+}
+
+function shiftQuestionReviewSchedule(
+  plan: UserPlan,
+  questionId: number,
+  sourceDate: ISODateString,
+  actualDate: ISODateString,
+) {
+  if (sourceDate === actualDate) {
+    return plan;
+  }
+
+  const allReviewDates = [
+    ...plan.reviewIntervals.map((intervalDay) =>
+      toISODateString(addDays(parseISO(sourceDate), intervalDay)),
+    ),
+    ...plan.reviewIntervals.map((intervalDay) =>
+      toISODateString(addDays(parseISO(actualDate), intervalDay)),
+    ),
+  ];
+
+  const normalizedDailyPlans = ensureDailyPlansExist(plan.dailyPlans, allReviewDates);
+
+  const nextDailyPlans = normalizedDailyPlans.map((dailyPlan) => {
+    const oldDueDates = plan.reviewIntervals.map((intervalDay) =>
+      toISODateString(addDays(parseISO(sourceDate), intervalDay)),
+    );
+    const newDueDates = plan.reviewIntervals.map((intervalDay) =>
+      toISODateString(addDays(parseISO(actualDate), intervalDay)),
+    );
+
+    let reviewQuestions = dailyPlan.reviewQuestions;
+
+    if (oldDueDates.includes(dailyPlan.date)) {
+      reviewQuestions = {
+        ...reviewQuestions,
+        questionIds: removeQuestionId(reviewQuestions.questionIds, questionId),
+        completedQuestionIds: removeQuestionId(reviewQuestions.completedQuestionIds, questionId),
+      };
+    }
+
+    if (newDueDates.includes(dailyPlan.date)) {
+      reviewQuestions = {
+        ...reviewQuestions,
+        questionIds: uniqueQuestionIds([...reviewQuestions.questionIds, questionId]),
+        completedQuestionIds: removeQuestionId(reviewQuestions.completedQuestionIds, questionId),
+      };
+    }
+
+    return syncDailyPlanCompletion({
+      ...dailyPlan,
+      reviewQuestions,
+    });
+  });
+
+  const nextReviewQueue = [
+    ...plan.reviewQueue.filter((item) => item.questionId !== questionId),
+    ...createReviewQueueEntries(questionId, actualDate, plan.reviewIntervals),
+  ];
+
+  return syncPlanSummary({
+    ...plan,
+    dailyPlans: nextDailyPlans,
+    reviewQueue: nextReviewQueue,
+  });
+}
+
+function markQuestionAsCompleted(
+  plan: UserPlan,
+  actualDate: ISODateString,
+  questionId: number,
+  taskType: "new" | "review",
+) {
+  if (taskType === "new") {
+    const sourceDate = findQuestionPlanDate(plan, questionId, "new");
+
+    if (!sourceDate) {
+      return plan;
+    }
+
+    const alignedPlan = shiftQuestionReviewSchedule(plan, questionId, sourceDate, actualDate);
+    const completionDate = findQuestionPlanDate(
+      alignedPlan,
+      questionId,
+      "new",
+      sourceDate,
+    );
+
+    if (!completionDate) {
+      return alignedPlan;
+    }
+
+    const nextDailyPlans = alignedPlan.dailyPlans.map((dailyPlan) => {
+      if (dailyPlan.date !== completionDate) {
+        return dailyPlan;
+      }
+
+      if (
+        !dailyPlan.newQuestions.questionIds.includes(questionId) ||
+        dailyPlan.newQuestions.completedQuestionIds.includes(questionId)
+      ) {
+        return dailyPlan;
+      }
+
+      return syncDailyPlanCompletion({
+        ...dailyPlan,
+        newQuestions: {
+          ...dailyPlan.newQuestions,
+          completedQuestionIds: uniqueQuestionIds([
+            ...dailyPlan.newQuestions.completedQuestionIds,
+            questionId,
+          ]),
+        },
+      });
+    });
+
+    return syncPlanSummary({
+      ...alignedPlan,
+      dailyPlans: nextDailyPlans,
+    });
+  }
+
+  const reviewDate = findQuestionPlanDate(plan, questionId, "review", actualDate);
+
+  if (!reviewDate) {
+    return plan;
+  }
+
+  const nextDailyPlans = plan.dailyPlans.map((dailyPlan) => {
+    if (dailyPlan.date !== reviewDate) {
+      return dailyPlan;
+    }
+
+    if (
+      !dailyPlan.reviewQuestions.questionIds.includes(questionId) ||
+      dailyPlan.reviewQuestions.completedQuestionIds.includes(questionId)
+    ) {
+      return dailyPlan;
+    }
+
+    return syncDailyPlanCompletion({
+      ...dailyPlan,
+      reviewQuestions: {
+        ...dailyPlan.reviewQuestions,
+        completedQuestionIds: uniqueQuestionIds([
+          ...dailyPlan.reviewQuestions.completedQuestionIds,
+          questionId,
+        ]),
+      },
+    });
+  });
+
+  return syncPlanSummary({
+    ...plan,
+    dailyPlans: nextDailyPlans,
+  });
 }
 
 function createReviewQueueEntries(
@@ -207,15 +414,7 @@ function moveNextQuestionToDate(plan: UserPlan, date: ISODateString) {
     }
 
     return dailyPlan;
-  }).map((dailyPlan) => ({
-    ...dailyPlan,
-    isCompleted:
-      dailyPlan.newQuestions.questionIds.length > 0 &&
-      dailyPlan.newQuestions.completedQuestionIds.length ===
-        dailyPlan.newQuestions.questionIds.length &&
-      dailyPlan.reviewQuestions.completedQuestionIds.length ===
-        dailyPlan.reviewQuestions.questionIds.length,
-  }));
+  }).map((dailyPlan) => syncDailyPlanCompletion(dailyPlan));
 
   const nextReviewQueue = [
     ...plan.reviewQueue.filter((item) => item.questionId !== questionId),
@@ -224,11 +423,11 @@ function moveNextQuestionToDate(plan: UserPlan, date: ISODateString) {
 
   return {
     questionId,
-    plan: {
+    plan: syncPlanSummary({
       ...plan,
       dailyPlans: nextDailyPlans,
       reviewQueue: nextReviewQueue,
-    },
+    }),
   };
 }
 
